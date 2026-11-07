@@ -1,0 +1,92 @@
+# SPDX-FileCopyrightText: 2026 mokume-metal
+# SPDX-License-Identifier: MIT
+#
+# 版を出す。v で始まる tag が push されたら、mokumesh.app を DMG に包んで Release に添える。
+#
+#   git tag v0.1.0 && git push origin v0.1.0
+#
+# GitHub の画面で先に Release (と tag) を作っても同じ push が起きるので、そのときは
+# 既にある Release へ DMG を足す。組む実体は scripts/build-dmg.sh (make dmg) に置き、
+# ここは呼ぶだけを保つ。
+#
+# **公証していない** (scripts/build-dmg.sh の冒頭)。Release のノートに初回の開き方を添える。
+#
+# PR では、組む手順に触れる変更のときだけ DMG を組んで workflow の artifact に置く。
+# 版を出す日になって初めて組めないと気付く状態を作らないため。
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  pull_request:
+    paths:
+      - scripts/build-dmg.sh
+      - .github/workflows/release.yml
+      - Makefile
+      - Package.swift
+      - App/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  dmg:
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+
+      - name: Decide the version
+        id: version
+        env:
+          EVENT: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = push ]; then
+            echo "version=${REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=0.0.0-pr$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build the DMG
+        run: make dmg VERSION=${{ steps.version.outputs.version }}
+
+      - name: Keep the DMG as an artifact
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v7
+        with:
+          name: mokumesh-${{ steps.version.outputs.version }}
+          path: dist/mokumesh-${{ steps.version.outputs.version }}.dmg
+          retention-days: 7
+
+      - name: Attach the DMG to the release
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          DMG: dist/mokumesh-${{ steps.version.outputs.version }}.dmg
+        run: |
+          set -euo pipefail
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            notes="$(mktemp)"
+            cat > "$notes" <<'NOTES'
+          ## 入れる
+
+          `mokumesh-*.dmg` を開き、`mokumesh.app` を Applications へドラッグする。macOS 26 以降・Apple Silicon。
+
+          **公証していないので、初回は Gatekeeper に止められる。** 一度開こうとしてから
+          「システム設定 → プライバシーとセキュリティ」の「このまま開く」を押す。
+          または端末で `xattr -dr com.apple.quarantine /Applications/mokumesh.app` を打つ。
+          NOTES
+            gh release create "$TAG" --verify-tag --title "$TAG" --notes-file "$notes" --generate-notes
+          fi
+          gh release upload "$TAG" "$DMG" --clobber
