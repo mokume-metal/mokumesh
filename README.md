@@ -7,7 +7,7 @@ SPDX-License-Identifier: MIT
 
 [mokume](https://github.com/mokume-metal/mokume) で作った作品を、プロジェクタで平面や立体物へ投影するためのマッピングのソフト (macOS / Apple Silicon・Swift + Metal)。MadMapper のような有料の道具に頼らずに、mokume の作品を本番へ出せるようにする。
 
-> **状態: 設計段階。** まだコードはありません。設計の土台は [ADR-0001](docs/decisions/0001-foundations.md) にあります。
+> **状態: 作りはじめ。** 受け渡しの約束・送り手の部品・受け手のライブラリまで。マッピングのアプリはまだ無い。設計の土台は [ADR-0001](docs/decisions/0001-foundations.md) にある。
 
 ## するもの
 
@@ -22,7 +22,32 @@ SPDX-License-Identifier: MIT
 
 ## mokume との関係
 
-- 絵は **Syphon** でも、mokumesh が配る**専用の受け渡し** (半精度のまま・コピー無し・フレームの時刻つき) でも受け取れる。Syphon で送る他のアプリの絵も映せる
+- 絵は **Syphon** でも、mokumesh が配る**専用の受け渡し**でも受け取れる。専用の受け渡しは、フレームの番号と時刻・名前つきの映像を運び、面を他のプロセスから読める形にしない。Syphon で送る他のアプリの絵も映せる
+- 専用の受け渡しは、いまは Syphon と同じ 8 bit・コピー 1 回である。mokume に汎用の出口の口 (コピー 0 回・半精度) が入ったら、送り手の部品だけを差し替えて上回る ([ADR-0001](docs/decisions/0001-foundations.md) 決定 3 の改訂)
+
+## スケッチから送る
+
+```swift
+// Package.swift
+.package(url: "https://github.com/mokume-metal/mokumesh.git", branch: "main")
+// ターゲットの dependencies
+.product(name: "MokumeshSender", package: "mokumesh")
+```
+
+```swift
+import mokume
+import MokumeshSender
+
+@main
+final class MySketch: Sketch {
+    let mokumesh = MokumeshPlugin(sending: "main")
+    var plugins: [any Plugin] { [mokumesh] }
+
+    func draw() { /* ... */ }
+}
+```
+
+受け手が起きていなくてもスケッチは止まらず、受け手が現れたところから渡し始める。受け手のアプリはまだ無い。手元で確かめるには `swift run ReceiveProbe` と `swift run SendExample` を並べて走らせる
 - mokume は mokumesh を知らない。mokumesh の側が mokume の版に追随する
 
 ## ライセンス
