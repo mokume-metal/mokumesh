@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mokume-metal/mokumesh/Schemas/mapping.schema.json",
+  "title": "mokumesh mapping configuration",
+  "description": "The calibration mokumesh saves and loads (ADR-0001 decision 7). Outputs are displays the Mac drives; each holds one or more regions, one per projector, so a splitter that divides one output among several projectors is a display with several regions (decision 6). Coordinates are normalized to 0–1.",
+  "type": "object",
+  "required": ["schemaVersion", "channel", "outputs"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "description": "The version of this format. Raised when the shape changes incompatibly."
+    },
+    "channel": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The link channel the receiver checks in under (org.mokume-metal.mokumesh.<channel>)."
+    },
+    "outputs": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/output" }
+    }
+  },
+  "$defs": {
+    "output": {
+      "type": "object",
+      "required": ["display", "regions"],
+      "additionalProperties": false,
+      "properties": {
+        "display": {
+          "type": "object",
+          "required": ["name", "id"],
+          "additionalProperties": false,
+          "description": "How to find the display. The id (CGDirectDisplayID) is tried first and the name second, because ids can change when displays are reconnected.",
+          "properties": {
+            "name": { "type": "string" },
+            "id": { "type": "integer", "minimum": 0, "maximum": 4294967295 }
+          }
+        },
+        "regions": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/region" }
+        }
+      }
+    },
+    "region": {
+      "type": "object",
+      "required": ["name", "rect", "stream", "corners"],
+      "additionalProperties": false,
+      "description": "One projector.",
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "rect": { "$ref": "#/$defs/rect" },
+        "stream": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The name of the stream this region shows."
+        },
+        "corners": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "description": "Where the picture's top-left, top-right, bottom-right and bottom-left corners land, normalized within the region. They must form a convex quadrilateral in that order.",
+          "items": { "$ref": "#/$defs/point" }
+        }
+      }
+    },
+    "rect": {
+      "type": "object",
+      "required": ["x", "y", "width", "height"],
+      "additionalProperties": false,
+      "description": "A rectangle normalized to the display's width and height.",
+      "properties": {
+        "x": { "type": "number", "minimum": 0, "maximum": 1 },
+        "y": { "type": "number", "minimum": 0, "maximum": 1 },
+        "width": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+        "height": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 }
+      }
+    },
+    "point": {
+      "type": "object",
+      "required": ["x", "y"],
+      "additionalProperties": false,
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" }
+      }
+    }
+  }
+}
