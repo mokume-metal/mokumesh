@@ -9,6 +9,10 @@ import PackageDescription
 // 受け渡しの約束と受け手 (MokumeshLink) は mokume に依存しない。mokume に依存するのは、
 // スケッチの plugins に入れる送り手の部品 (MokumeshSender) と、その検査・例だけである。
 // mokume は mokumesh を知らず、mokumesh が mokume に追随する (docs/decisions/0001)。
+//
+// **アプリは App/ の別のパッケージに置く。** アプリは Syphon.xcframework (binaryTarget) を
+// 引くが、SwiftPM は binaryTarget を、それを使わない利用者にもダウンロードさせる。
+// 送り手の部品だけを使うスケッチに Syphon を引かせないため、ここには入れない。
 
 let package = Package(
     name: "mokumesh",
@@ -18,7 +22,6 @@ let package = Package(
         .library(name: "MokumeshLink", targets: ["MokumeshLink"]),
         .library(name: "MokumeshSender", targets: ["MokumeshSender"]),
         .library(name: "MokumeshMapping", targets: ["MokumeshMapping"]),
-        .executable(name: "mokumesh", targets: ["mokumesh"]),
     ],
     dependencies: [
         // 0.x の間は minor で壊れうるので upToNextMinor で張る (mokume の ADR-0024 決定 9)
@@ -34,10 +37,6 @@ let package = Package(
             dependencies: ["MokumeshLink", .product(name: "mokume", package: "mokume")],
             swiftSettings: .mokume),
         .target(name: "MokumeshMapping", swiftSettings: [.swiftLanguageMode(.v6)]),
-        // マッピングのアプリ。mokume には依存しない
-        .executableTarget(
-            name: "mokumesh", dependencies: ["MokumeshLink", "MokumeshMapping"],
-            swiftSettings: [.swiftLanguageMode(.v6)]),
         .testTarget(
             name: "MokumeshMappingTests", dependencies: ["MokumeshMapping"],
             swiftSettings: [.swiftLanguageMode(.v6)]),

@@ -26,6 +26,9 @@ final class MokumeshOutlet: Outlet {
 
     private(set) var failure: String?
 
+    /// 送り出しの統計。GPU の完了の知らせから書くので錠で守る。
+    let statistics = StatisticsBox()
+
     init(channel: String, stream: String) throws(LinkError) {
         link = try LinkSender(channel: channel, stream: stream)
     }
@@ -60,8 +63,10 @@ final class MokumeshOutlet: Outlet {
             let link = self.link
             let number = frame.frame
             let time = frame.time
+            let statistics = self.statistics
             commands.addCompletedHandler { buffer in
                 if buffer.status == .completed {
+                    statistics.addGPUTime(buffer.gpuEndTime - buffer.gpuStartTime)
                     link.publish(slot, frame: number, time: time, handedHostTime: handed)
                 } else {
                     link.abandon(slot)
@@ -107,5 +112,25 @@ final class MokumeshOutlet: Outlet {
         textures[slot.index] = texture
         texturesMade += 1
         return texture
+    }
+}
+
+/// 送り出しの統計を、スレッドをまたいで足していく箱。
+final class StatisticsBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var gpuSeconds: Double = 0
+    private var gpuSamples = 0
+
+    func addGPUTime(_ seconds: Double) {
+        lock.lock()
+        defer { lock.unlock() }
+        gpuSeconds += seconds
+        gpuSamples += 1
+    }
+
+    var gpu: (seconds: Double, samples: Int) {
+        lock.lock()
+        defer { lock.unlock() }
+        return (gpuSeconds, gpuSamples)
     }
 }
