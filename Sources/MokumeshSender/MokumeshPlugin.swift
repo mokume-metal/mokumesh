@@ -47,6 +47,29 @@ public struct MokumeshPlugin: Plugin {
         outlet = try? MokumeshOutlet(channel: channel, stream: stream)
     }
 
+    /// 送り出しの統計。
+    public struct Statistics: Sendable, Equatable {
+        /// 受け手へ届けた枚数。
+        public var framesPublished: Int
+        /// 空いている面が無く、送れなかった枚数 (受け手が読み終えていない)。
+        public var framesDropped: Int
+        /// 受け手の面へ写す GPU の時間の合計 (秒) と、その回数。
+        public var gpuSeconds: Double
+        public var gpuSamples: Int
+        /// 面が空かないまま続き、受け手に面の組を作り直してもらった回数。
+        public var regenerations: Int
+    }
+
+    /// いままでの送り出しの統計。受け手が居ない間は数えない。
+    public var statistics: Statistics {
+        guard let outlet else { return Statistics(framesPublished: 0, framesDropped: 0, gpuSeconds: 0, gpuSamples: 0, regenerations: 0) }
+        let counters = outlet.link.counters
+        let gpu = outlet.statistics.gpu
+        return Statistics(
+            framesPublished: counters.framesPublished, framesDropped: counters.framesDropped,
+            gpuSeconds: gpu.seconds, gpuSamples: gpu.samples, regenerations: counters.regenerations)
+    }
+
     public func register(into registry: PluginRegistry) {
         if let outlet { registry.add(outlet: outlet) }
     }

@@ -151,6 +151,33 @@ struct LinkTests {
         #expect(again?.index == slots[0].index)
     }
 
+    @Test("面を返す通が失われて面が空かなくなっても、名乗り直して立ち直る")
+    func sender_recovers_when_releases_are_lost() throws {
+        let channel = Self.channel()
+        let receiver = try LinkReceiver(channel: channel)
+        defer { receiver.close() }
+        let sender = try LinkSender(channel: channel)
+        defer { sender.close() }
+        #expect(Self.connect(sender))
+
+        // 3 枚とも借りたまま返さない (RELEASE が失われたのと同じ)
+        let lost = (0..<3).compactMap { _ in sender.acquire() }
+        #expect(lost.count == 3)
+        for _ in 0..<LinkSender.starvationLimit {
+            sender.prepare(width: 8, height: 4, format: .rgba8DisplayP3)
+            #expect(sender.acquire() == nil)
+        }
+        var recovered: LinkSender.Slot?
+        #expect(
+            Self.waitUntil {
+                sender.prepare(width: 8, height: 4, format: .rgba8DisplayP3)
+                recovered = sender.acquire()
+                return recovered != nil
+            }, "面が空かないまま立ち直らない")
+        #expect(recovered?.generation != lost[0].generation, "新しい面の組になっていない")
+        #expect(sender.counters.regenerations == 1)
+    }
+
     @Test("取られる前に次の 1 枚が届くと、古い 1 枚はその場で送り手へ返る")
     func superseded_frame_is_returned_to_sender() throws {
         let channel = Self.channel()

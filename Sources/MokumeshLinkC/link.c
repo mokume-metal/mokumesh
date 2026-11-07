@@ -22,11 +22,20 @@ typedef struct {
 kern_return_t mokumesh_check_in(const char *name, mach_port_t *outReceive) {
     // launchd に宣言していない名前でも、署名の無いプロセスから check_in できる
     // (2026-11-07 に macOS 27 で実測)。非推奨の bootstrap_register は使わない
-    return bootstrap_check_in(bootstrap_port, name, outReceive);
+    kern_return_t kr = bootstrap_check_in(bootstrap_port, name, outReceive);
+    if (kr == KERN_SUCCESS) mokumesh_enlarge_queue(*outReceive);
+    return kr;
 }
 
 kern_return_t mokumesh_look_up(const char *name, mach_port_t *outSend) {
     return bootstrap_look_up(bootstrap_port, name, outSend);
+}
+
+kern_return_t mokumesh_enlarge_queue(mach_port_t port) {
+    mach_port_limits_t limits = { .mpl_qlimit = MACH_PORT_QLIMIT_LARGE };
+    return mach_port_set_attributes(
+        mach_task_self(), port, MACH_PORT_LIMITS_INFO, (mach_port_info_t)&limits,
+        MACH_PORT_LIMITS_INFO_COUNT);
 }
 
 kern_return_t mokumesh_allocate_port(mach_port_t *outReceive) {

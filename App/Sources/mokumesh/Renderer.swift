@@ -11,9 +11,13 @@ import simd
 /// 届いた絵を、領域ごとに 4 点合わせで歪めて drawable へ描く。
 ///
 /// 領域の矩形をそのまま覆う四角形を描き、断片ごとに逆の射影変換で絵の座標を求めて取る。
-/// 四角形の外 (絵の外) は黒にする。色は、面を `rgba8Unorm_srgb` として読んで線形で補間し、
-/// `bgra8Unorm_srgb` の drawable へ書く (層の色空間は Display P3)。届く絵の alpha は
-/// straight なので、黒の上へ `rgb × a` で重ねる。
+/// 四角形の外 (絵の外) は黒にする。`bgra8Unorm_srgb` の drawable へ線形の値で書く
+/// (層の色空間は Display P3)。
+///
+/// | 来た道 | 読み方 | alpha |
+/// | --- | --- | --- |
+/// | 専用の受け渡し | 面を `rgba8Unorm_srgb` で読む (線形で補間される) | straight なので黒の上へ `rgb × a` |
+/// | Syphon | そのまま読み、断片で sRGB の曲線を外す | 乗算済み (Syphon の慣習) なので `rgb` をそのまま |
 @MainActor
 final class Renderer {
     static let drawablePixelFormat = MTLPixelFormat.bgra8Unorm_srgb
@@ -31,6 +35,8 @@ final class Renderer {
         var regionOrigin: SIMD2<Float>
         var regionSize: SIMD2<Float>
         var drawableSize: SIMD2<Float>
+        /// 1: 断片で sRGB の曲線を外す / 2: 乗算済み
+        var flags: UInt32
     }
 
     init?() {
@@ -61,11 +67,11 @@ final class Renderer {
 
     /// 1 枚の drawable に、領域を全部描く。`frames` は映像の名前で引く。
     ///
-    /// 描いた絵 (`LinkFrame`) は投入が終わるまで持ち続ける — 持っている間は受け手が面を
+    /// 描いた絵 (`SourceFrame`) は投入が終わるまで持ち続ける — 持っている間は受け手が面を
     /// 送り手へ返さないので、GPU が読んでいる途中に上書きされない。
     func draw(
-        regions: [MappingConfig.Region], frames: [String: LinkFrame], into layer: CAMetalLayer,
-        presented: (@Sendable (_ presentedTime: Double, _ frames: [LinkFrame]) -> Void)? = nil
+        regions: [MappingConfig.Region], frames: [String: SourceFrame], into layer: CAMetalLayer,
+        presented: (@Sendable (_ presentedTime: Double, _ frames: [SourceFrame]) -> Void)? = nil
     ) {
         guard let drawable = layer.nextDrawable(), let commands = queue.makeCommandBuffer() else { return }
         let pass = MTLRenderPassDescriptor()
@@ -75,14 +81,13 @@ final class Renderer {
         pass.colorAttachments[0].storeAction = .store
         guard let encoder = commands.makeRenderCommandEncoder(descriptor: pass) else { return }
         let drawableSize = SIMD2(Float(drawable.texture.width), Float(drawable.texture.height))
-        var used: [LinkFrame] = []
+        var used: [SourceFrame] = []
 
         encoder.setRenderPipelineState(pipeline)
         encoder.setFragmentSamplerState(sampler, index: 0)
         for region in regions {
-            guard let frame = frames[region.stream], let homography = region.homography,
-                let texture = texture(for: frame)
-            else { continue }
+            guard let frame = frames[region.stream], let homography = region.homography else { continue }
+            let texture = frame.texture
             used.append(frame)
             let inverse = homography.inverse
             var uniforms = Uniforms(
@@ -92,7 +97,8 @@ final class Renderer {
                         SIMD3<Float>(inverse.columns.2))),
                 regionOrigin: SIMD2(Float(region.rect.x), Float(region.rect.y)) * drawableSize,
                 regionSize: SIMD2(Float(region.rect.width), Float(region.rect.height)) * drawableSize,
-                drawableSize: drawableSize)
+                drawableSize: drawableSize,
+                flags: (frame.decodesInShader ? 1 : 0) | (frame.premultiplied ? 2 : 0))
             encoder.setVertexBytes(&uniforms, length: MemoryLayout<Uniforms>.stride, index: 0)
             encoder.setFragmentBytes(&uniforms, length: MemoryLayout<Uniforms>.stride, index: 0)
             encoder.setFragmentTexture(texture, index: 0)
@@ -112,7 +118,8 @@ final class Renderer {
         commands.commit()
     }
 
-    private func texture(for frame: LinkFrame) -> (any MTLTexture)? {
+    /// 専用の受け渡しの面を、`rgba8Unorm_srgb` の texture に包む。面の識別子で覚えておく。
+    func texture(for frame: LinkFrame) -> (any MTLTexture)? {
         let id = IOSurfaceGetID(frame.surface)
         if let texture = textures[id], texture.width == frame.width, texture.height == frame.height {
             return texture
@@ -137,7 +144,12 @@ final class Renderer {
             float2 regionOrigin;
             float2 regionSize;
             float2 drawableSize;
+            uint flags;
         };
+
+        static float3 decodeSRGB(float3 c) {
+            return select(pow((c + 0.055) / 1.055, 2.4), c / 12.92, c <= 0.04045);
+        }
 
         struct Varyings {
             float4 position [[position]];
@@ -163,7 +175,9 @@ final class Renderer {
             float2 uv = projected.xy / projected.z;
             if (any(uv < 0) || any(uv > 1)) return float4(0, 0, 0, 1);
             float4 color = picture.sample(linear, uv);
-            return float4(color.rgb * color.a, 1);
+            if (u.flags & 1) color.rgb = decodeSRGB(color.rgb);
+            float3 over = (u.flags & 2) ? color.rgb : color.rgb * color.a;
+            return float4(over, 1);
         }
         """
 }

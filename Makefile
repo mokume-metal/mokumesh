@@ -4,8 +4,10 @@
 .DEFAULT_GOAL := ci-check
 .PHONY: build test schemas reuse-lint ci-check clean
 
+# App/ はアプリの別のパッケージ (Syphon を引く。根の Package.swift の冒頭)
 build:
 	swift build
+	swift build --package-path App
 
 test:
 	swift test

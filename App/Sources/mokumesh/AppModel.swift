@@ -43,19 +43,22 @@ final class AppModel {
     private(set) var receiver: LinkReceiver?
     private(set) var receiverError: String?
     /// 映像の名前ごとの、いま映している 1 枚。
-    @ObservationIgnored private(set) var currentFrames: [String: LinkFrame] = [:]
+    @ObservationIgnored private(set) var currentFrames: [String: SourceFrame] = [:]
     /// 受けた枚数 (操作窓に出す)。
     private(set) var framesShown = 0
     private(set) var lastMessage: String?
 
     @ObservationIgnored let renderer = Renderer()
+    @ObservationIgnored private lazy var syphon: SyphonSources? = renderer.map { SyphonSources(device: $0.device) }
     @ObservationIgnored private var outputWindows: [OutputWindow] = []
     /// 本番 (操作窓なし) で起きているか。Esc で窓を閉じない。
     @ObservationIgnored var isProduction = false
     /// 出力を表示装置ではなく普通の窓に出す (`--window`)。
     @ObservationIgnored var isWindowed = false
+    /// 計測しているか。しているときは、届いた 1 枚の上端から描いた時刻を読む。
+    @ObservationIgnored var isMeasuring = false
     /// 提示の時刻を受け取る先 (計測)。
-    @ObservationIgnored var onPresented: (@Sendable (Double, [LinkFrame]) -> Void)?
+    @ObservationIgnored var onPresented: (@Sendable (Double, [SourceFrame]) -> Void)?
 
     init(config: MappingConfig) {
         self.config = config
@@ -75,25 +78,43 @@ final class AppModel {
         }
     }
 
-    var streams: [String] { receiver?.streams ?? [] }
+    /// 映せる映像。専用の受け渡しの映像と、Syphon の送り手 (`syphon:` で始まる)。
+    var streams: [String] { (receiver?.streams ?? []) + (syphon?.streams ?? []) }
 
     /// 映している映像それぞれの最新の 1 枚を取る。新しい 1 枚が来たら、前の 1 枚は手放す
     /// (描いている途中のものは、描く側が持ち続けている)。
     func pullFrames() {
-        guard let receiver else { return }
         let wanted = Set(config.outputs.flatMap { $0.regions.map(\.stream) })
-        for stream in wanted {
-            if let frame = receiver.latest(stream: stream) {
+        if let receiver, let renderer {
+            for stream in wanted where !SyphonSources.isSyphon(stream) {
+                guard let frame = receiver.latest(stream: stream), let texture = renderer.texture(for: frame)
+                else { continue }
+                let source = SourceFrame(link: frame, texture: texture)
+                if isMeasuring { source.drawnHostTime = TimeCode.read(frame.surface) }
+                currentFrames[stream] = source
+                framesShown += 1
+            }
+            for stream in currentFrames.keys
+            where !SyphonSources.isSyphon(stream) && !receiver.streams.contains(stream) {
+                currentFrames[stream] = nil
+            }
+        }
+        if let syphon {
+            for (stream, frame) in syphon.pull(wanted) {
+                if isMeasuring, let surface = frame.texture.iosurface {
+                    frame.drawnHostTime = TimeCode.read(surface)
+                }
                 currentFrames[stream] = frame
                 framesShown += 1
             }
-        }
-        for stream in currentFrames.keys where !receiver.streams.contains(stream) {
-            currentFrames[stream] = nil
+            let alive = Set(syphon.streams)
+            for stream in currentFrames.keys where SyphonSources.isSyphon(stream) && !alive.contains(stream) {
+                currentFrames[stream] = nil
+            }
         }
     }
 
-    func presentedHandler() -> (@Sendable (Double, [LinkFrame]) -> Void)? { onPresented }
+    func presentedHandler() -> (@Sendable (Double, [SourceFrame]) -> Void)? { onPresented }
 
     // MARK: - 出力
 
@@ -157,6 +178,8 @@ final class AppModel {
                 continue
             }
             let window = OutputWindow(screen: screen, outputIndex: index, model: self, windowed: isWindowed)
+            // 計測は提示の時刻を見るので、窓が他の窓の後ろに回って提示が止まらないよう前面に浮かせる
+            if isMeasuring, isWindowed { window.level = .floating }
             window.orderFrontRegardless()
             outputWindows.append(window)
         }
