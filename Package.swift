@@ -17,6 +17,8 @@ let package = Package(
     products: [
         .library(name: "MokumeshLink", targets: ["MokumeshLink"]),
         .library(name: "MokumeshSender", targets: ["MokumeshSender"]),
+        .library(name: "MokumeshMapping", targets: ["MokumeshMapping"]),
+        .executable(name: "mokumesh", targets: ["mokumesh"]),
     ],
     dependencies: [
         // 0.x の間は minor で壊れうるので upToNextMinor で張る (mokume の ADR-0024 決定 9)
@@ -31,6 +33,14 @@ let package = Package(
             name: "MokumeshSender",
             dependencies: ["MokumeshLink", .product(name: "mokume", package: "mokume")],
             swiftSettings: .mokume),
+        .target(name: "MokumeshMapping", swiftSettings: [.swiftLanguageMode(.v6)]),
+        // マッピングのアプリ。mokume には依存しない
+        .executableTarget(
+            name: "mokumesh", dependencies: ["MokumeshLink", "MokumeshMapping"],
+            swiftSettings: [.swiftLanguageMode(.v6)]),
+        .testTarget(
+            name: "MokumeshMappingTests", dependencies: ["MokumeshMapping"],
+            swiftSettings: [.swiftLanguageMode(.v6)]),
         .testTarget(
             name: "MokumeshLinkTests", dependencies: ["MokumeshLink", "MokumeshLinkC"],
             swiftSettings: [.swiftLanguageMode(.v6)]),

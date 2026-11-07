@@ -11,6 +11,7 @@
 version = 1
 
 [[annotations]]
-path = [".gitignore", "Makefile"]
+# JSON はコメントを持てない
+path = [".gitignore", "Makefile", "Schemas/mapping.schema.json", "Schemas/examples/mapping.json"]
 SPDX-FileCopyrightText = "2026 mokume-metal"
 SPDX-License-Identifier = "MIT"
