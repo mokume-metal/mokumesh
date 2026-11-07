@@ -122,7 +122,10 @@ struct MappingConfigTests {
         let config = MappingConfig(
             outputs: [.init(display: .init(name: "TripleHead", id: 7), regions: regions)])
         let decoded = try MappingConfig.decode(config.encode())
-        #expect(decoded.outputs[0].regions.map(\.rect.x) == [0, 1.0 / 3, 2.0 / 3])
+        // 期待値は型を書いて外に出す。#expect の中の配列リテラルは、CI の Swift で型の推論が時間切れになった
+        let expected: [Double] = [0, 1.0 / 3, 2.0 / 3]
+        let actual = decoded.outputs[0].regions.map(\.rect.x)
+        #expect(actual == expected)
     }
 
     @Test("知らない版は読まない")
