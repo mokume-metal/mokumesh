@@ -70,6 +70,12 @@ kern_return_t mokumesh_look_up(const char *name, mach_port_t *outSend);
 /// 名前の無い受け口を作る (receive right と、それに対する send right を 1 つ)。
 kern_return_t mokumesh_allocate_port(mach_port_t *outReceive);
 
+/// 受け口に溜められる通の数を、既定 (5 通) から大きくする。受け手の受け口には、複数の
+/// 送り手・映像の FRAME が集まる。溜まりきると送り手の送りが時間切れになり、送り手は
+/// 受け手が居なくなったとみなして繋ぎ直してしまう。
+/// (送り手の受け口へは、面の枚数を超える RELEASE が溜まらないので要らない)
+kern_return_t mokumesh_enlarge_queue(mach_port_t port);
+
 /// 受け口を壊す。待っている mokumesh_receive はエラーで戻る。
 void mokumesh_destroy_receive(mach_port_t port);
 

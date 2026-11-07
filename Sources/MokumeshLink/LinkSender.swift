@@ -34,6 +34,8 @@ public final class LinkSender: Sendable {
         public var framesDropped = 0
         /// 受け手を引けた回数 (繋ぎ直すたびに増える)。
         public var connections = 0
+        /// 面が空かないまま続いたので、名乗り直して面の組を作り直してもらった回数。
+        public var regenerations = 0
     }
 
     public let channel: String
@@ -41,6 +43,12 @@ public final class LinkSender: Sendable {
 
     /// 受け手が見つからないとき、次に引きに行くまでの間。
     public static let lookUpInterval: TimeInterval = 0.5
+
+    /// 空いている面が無いまま、名乗り直すまでに許すフレームの数。
+    ///
+    /// 受け手が面を返す通 (RELEASE) が失われると、その面は二度と空かない。3 枚とも失うと
+    /// 送り手は止まったままになる。60fps で 0.5 秒続いたら、面の組を作り直してもらって立ち直る。
+    public static let starvationLimit = 30
 
     private enum Phase {
         /// 受け手を引けていない。
@@ -55,6 +63,8 @@ public final class LinkSender: Sendable {
     private struct State {
         var phase = Phase.disconnected(lastAttempt: nil)
         var counters = Counters()
+        /// 続けて面が空いていなかった回数。
+        var starved = 0
     }
 
     /// 受け手からの通 (SURFACES・RELEASE) を受ける口。
@@ -109,7 +119,12 @@ public final class LinkSender: Sendable {
                 state.phase = .waiting(receiver: receiver, width: width, height: height, format: format)
                 return (receiver, helloMessage(width: width, height: height, format: format))
             case .waiting(let receiver, let w, let h, let f), .ready(let receiver, let w, let h, let f, _, _, _):
-                guard w != width || h != height || f != format else { return nil }
+                let starving = state.starved >= Self.starvationLimit
+                guard w != width || h != height || f != format || starving else { return nil }
+                if starving {
+                    state.starved = 0
+                    state.counters.regenerations += 1
+                }
                 state.phase = .waiting(receiver: receiver, width: width, height: height, format: format)
                 return (receiver, helloMessage(width: width, height: height, format: format))
             }
@@ -130,8 +145,10 @@ public final class LinkSender: Sendable {
             else { return nil }
             guard let index = free.min() else {
                 state.counters.framesDropped += 1
+                state.starved += 1
                 return nil
             }
+            state.starved = 0
             free.remove(index)
             state.phase = .ready(
                 receiver: receiver, width: w, height: h, format: f, generation: generation,
