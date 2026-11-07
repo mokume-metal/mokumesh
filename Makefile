@@ -2,7 +2,7 @@
 # (ローカルと CI の乖離を構造的に作らない。mokume の ADR-0001 原則 8)。
 
 .DEFAULT_GOAL := ci-check
-.PHONY: build test schemas reuse-lint ci-check clean
+.PHONY: build test schemas reuse-lint ci-check dmg clean
 
 # App/ はアプリの別のパッケージ (Syphon を引く。根の Package.swift の冒頭)
 build:
@@ -21,5 +21,11 @@ reuse-lint:
 
 ci-check: build test schemas reuse-lint ## CI と同一の検査 — push 前に通す
 
+# 配る DMG を dist/ に組む (ci-check には入れない — 検査ではなく配布物)。
+# CI の Release (.github/workflows/release.yml) も同じこれを呼ぶ。make dmg VERSION=0.1.0
+VERSION ?= 0.0.0-dev
+dmg:
+	scripts/build-dmg.sh $(VERSION)
+
 clean:
-	rm -rf .build
+	rm -rf .build dist

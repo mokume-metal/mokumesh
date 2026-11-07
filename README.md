@@ -49,6 +49,20 @@ final class MySketch: Sketch {
 
 受け手が起きていなくてもスケッチは止まらず、受け手が現れたところから渡し始める。
 
+## 入れる
+
+[Releases](https://github.com/mokume-metal/mokumesh/releases) から `mokumesh-<版>.dmg` を落として開き、`mokumesh.app` を Applications へドラッグする (macOS 26 以降・Apple Silicon)。
+
+**公証していないので、初回は Gatekeeper に止められる。** 一度開こうとしてから「システム設定 → プライバシーとセキュリティ」の「このまま開く」を押す。または端末で次を打つ。
+
+```bash
+xattr -dr com.apple.quarantine /Applications/mokumesh.app
+```
+
+.app から開くと操作窓が出る。`--config` などの引数を渡すときは `/Applications/mokumesh.app/Contents/MacOS/mokumesh --config mapping.json` のように中の実行ファイルを呼ぶ。
+
+版を出すのは `v` で始まる tag の push で、[Release のワークフロー](.github/workflows/release.yml)が DMG を組んで Release に添える。手元で同じものを組むには `make dmg VERSION=0.1.0` (出力は `dist/`)。
+
 ## 映す
 
 アプリは `App/` の別のパッケージにある (Syphon.xcframework を引くのはアプリだけにするため)。
