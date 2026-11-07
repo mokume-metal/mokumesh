@@ -14,15 +14,30 @@ final class OutputWindow: NSWindow {
     let outputIndex: Int
     private let mapView: MapView
 
-    init(screen: NSScreen, outputIndex: Int, model: AppModel) {
+    /// - Parameter windowed: 表示装置を覆わず、普通の窓に出す (`--window`)。プロジェクタの無い
+    ///   手元で歪めを確かめるためにある。窓の大きさが表示装置の代わりになる。
+    init(screen: NSScreen, outputIndex: Int, model: AppModel, windowed: Bool = false) {
         self.outputIndex = outputIndex
         mapView = MapView(outputIndex: outputIndex, model: model)
-        super.init(
-            contentRect: screen.frame, styleMask: [.borderless], backing: .buffered, defer: false)
-        setFrame(screen.frame, display: false)
-        // メニューバーより上に置く。プロジェクタの画面にメニューバーが出ていても隠れる
-        level = .mainMenu + 1
-        collectionBehavior = [.canJoinAllSpaces, .fullScreenNone, .stationary]
+        if windowed {
+            let size = NSSize(width: 960, height: 540)
+            super.init(
+                contentRect: NSRect(origin: .zero, size: size),
+                styleMask: [.titled, .closable, .resizable, .miniaturizable], backing: .buffered,
+                defer: false)
+            title = "mokumesh 出力 \(outputIndex + 1) (\(screen.localizedName) の代わり)"
+            setFrameOrigin(
+                NSPoint(
+                    x: screen.visibleFrame.midX - size.width / 2 + CGFloat(outputIndex) * 40,
+                    y: screen.visibleFrame.midY - size.height / 2 - CGFloat(outputIndex) * 40))
+        } else {
+            super.init(
+                contentRect: screen.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+            setFrame(screen.frame, display: false)
+            // メニューバーより上に置く。プロジェクタの画面にメニューバーが出ていても隠れる
+            level = .mainMenu + 1
+            collectionBehavior = [.canJoinAllSpaces, .fullScreenNone, .stationary]
+        }
         backgroundColor = .black
         isReleasedWhenClosed = false
         hasShadow = false

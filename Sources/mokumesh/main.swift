@@ -11,10 +11,12 @@ import SwiftUI
 //   mokumesh                       操作窓を出して較正する
 //   mokumesh --config <file>       操作窓を出さずに、設定のとおりに映す (本番)
 //   mokumesh --channel <name>      受け手のチャンネルを選ぶ (既定は default)
+//   mokumesh --window              出力を表示装置ではなく普通の窓に出す (プロジェクタの無い手元で確かめる)
 
 struct Arguments {
     var configPath: String?
     var channel: String?
+    var windowed = false
 
     init(_ arguments: [String]) {
         var iterator = arguments.dropFirst().makeIterator()
@@ -22,8 +24,9 @@ struct Arguments {
             switch argument {
             case "--config": configPath = iterator.next()
             case "--channel": channel = iterator.next()
+            case "--window": windowed = true
             case "--help", "-h":
-                print("使い方: mokumesh [--config <file>] [--channel <name>]")
+                print("使い方: mokumesh [--config <file>] [--channel <name>] [--window]")
                 exit(0)
             default:
                 FileHandle.standardError.write(Data("知らない引数: \(argument)\n".utf8))
@@ -60,6 +63,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let model = AppModel(config: config)
         model.configURL = configURL
+        model.isWindowed = arguments.windowed
         self.model = model
         if let error = model.receiverError {
             FileHandle.standardError.write(Data("\(error)\n".utf8))

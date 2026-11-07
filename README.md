@@ -7,7 +7,7 @@ SPDX-License-Identifier: MIT
 
 [mokume](https://github.com/mokume-metal/mokume) で作った作品を、プロジェクタで平面や立体物へ投影するためのマッピングのソフト (macOS / Apple Silicon・Swift + Metal)。MadMapper のような有料の道具に頼らずに、mokume の作品を本番へ出せるようにする。
 
-> **状態: 作りはじめ。** 受け渡しの約束・送り手の部品・受け手のライブラリまで。マッピングのアプリはまだ無い。設計の土台は [ADR-0001](docs/decisions/0001-foundations.md) にある。
+> **状態: 作りはじめ。** 1 つの領域を 4 点合わせで映すところまで。メッシュ・マスク・ブレンド・3D・Syphon の受け口はまだ無い。設計の土台は [ADR-0001](docs/decisions/0001-foundations.md) にある。
 
 ## するもの
 
@@ -47,7 +47,22 @@ final class MySketch: Sketch {
 }
 ```
 
-受け手が起きていなくてもスケッチは止まらず、受け手が現れたところから渡し始める。受け手のアプリはまだ無い。手元で確かめるには `swift run ReceiveProbe` と `swift run SendExample` を並べて走らせる
+受け手が起きていなくてもスケッチは止まらず、受け手が現れたところから渡し始める。
+
+## 映す
+
+```bash
+swift run mokumesh                          # 操作窓を出して較正する
+swift run mokumesh --config mapping.json    # 操作窓を出さずに、設定のとおりに映す (本番)
+swift run mokumesh --window                 # 出力を表示装置ではなく普通の窓に出す (プロジェクタの無い手元で)
+```
+
+1. 操作窓の「表示装置」で、プロジェクタを繋いだ表示装置を入れる。その表示装置を縁の無い窓が覆う
+2. 「4 隅を動かす」を入れ、出力の窓の上で隅をドラッグする。矢印キーで 1 画素、shift を押しながらで 10 画素ずつ動く。四角形が裏返る・凹む動きは採らない
+3. 「保存」で設定を JSON に書く (形式は [Schemas/mapping.schema.json](Schemas/mapping.schema.json))。本番は `--config` で読む
+4. 出力の窓で Esc を押すと、映すのをやめる (本番では効かない)
+
+送り手が無いときは `swift run SendExample` で例のスケッチを送れる。
 - mokume は mokumesh を知らない。mokumesh の側が mokume の版に追随する
 
 ## ライセンス

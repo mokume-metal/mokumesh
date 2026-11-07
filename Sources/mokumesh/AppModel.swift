@@ -52,6 +52,8 @@ final class AppModel {
     @ObservationIgnored private var outputWindows: [OutputWindow] = []
     /// 本番 (操作窓なし) で起きているか。Esc で窓を閉じない。
     @ObservationIgnored var isProduction = false
+    /// 出力を表示装置ではなく普通の窓に出す (`--window`)。
+    @ObservationIgnored var isWindowed = false
     /// 提示の時刻を受け取る先 (計測)。
     @ObservationIgnored var onPresented: (@Sendable (Double, [LinkFrame]) -> Void)?
 
@@ -125,10 +127,8 @@ final class AppModel {
     /// 隅を動かす。四角形が裏返る・潰れる動きは採らない。
     func moveCorner(output: Int, region: Int, corner: Int, to point: Point) {
         guard output < config.outputs.count, region < config.outputs[output].regions.count else { return }
-        var corners = config.outputs[output].regions[region].corners
-        corners[corner] = point
-        guard Homography.isConvex(corners) else { return }
-        config.outputs[output].regions[region].corners = corners
+        guard let moved = config.outputs[output].regions[region].movingCorner(corner, to: point) else { return }
+        config.outputs[output].regions[region] = moved
         outputWindows.first { $0.outputIndex == output }?.refreshOverlay()
     }
 
@@ -151,16 +151,17 @@ final class AppModel {
         displays = ConnectedDisplay.all()
         var missing: [String] = []
         for (index, output) in config.outputs.enumerated() {
-            guard let display = ConnectedDisplay.find(output.display, in: displays) else {
+            let found = ConnectedDisplay.find(output.display, in: displays)
+            guard let screen = found?.screen ?? (isWindowed ? NSScreen.main : nil) else {
                 missing.append(output.display.name)
                 continue
             }
-            let window = OutputWindow(screen: display.screen, outputIndex: index, model: self)
+            let window = OutputWindow(screen: screen, outputIndex: index, model: self, windowed: isWindowed)
             window.orderFrontRegardless()
             outputWindows.append(window)
         }
         lastMessage = missing.isEmpty ? nil : "見つからない表示装置: \(missing.joined(separator: ", "))"
-        if isProduction { NSCursor.hide() }
+        if isProduction, !isWindowed { NSCursor.hide() }
     }
 
     func closeOutputsFromKeyboard() {
