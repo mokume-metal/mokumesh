@@ -2,6 +2,7 @@
 // SPDX-FileCopyrightText: 2026 mokume-metal
 // SPDX-License-Identifier: MIT
 
+import Foundation
 import PackageDescription
 
 // mokumesh のアプリ。根のパッケージ (受け渡し・マッピング) をパスで使い、Syphon を引く。
@@ -9,6 +10,15 @@ import PackageDescription
 // 根と分けるのは、Syphon.xcframework (binaryTarget) をスケッチの利用者に引かせないため
 // (根の Package.swift の冒頭)。Syphon は mokume-syphon の Release の資産を、版と checksum で
 // 固定して引く (同じ org の成果物)。
+
+// 根を path で引くと、その package の名前は根のディレクトリ名 (symlink を解いた実パスの
+// 末尾) で決まり、`.package(name:path:)` は廃止済みで指定できない。"mokumesh" と書くと、
+// 名前の違う checkout や worktree で組めなくなるので、自分の場所から求める (#13)。
+// CI はこれを確かめるため、わざと mokumesh 以外の名前で checkout する (.github/workflows/ci.yml)。
+let root = URL(fileURLWithPath: Context.packageDirectory)
+    .resolvingSymlinksInPath()
+    .deletingLastPathComponent()
+    .lastPathComponent
 
 let package = Package(
     name: "mokumesh-app",
@@ -30,8 +40,8 @@ let package = Package(
         .executableTarget(
             name: "mokumesh",
             dependencies: [
-                .product(name: "MokumeshLink", package: "mokumesh"),
-                .product(name: "MokumeshMapping", package: "mokumesh"),
+                .product(name: "MokumeshLink", package: root),
+                .product(name: "MokumeshMapping", package: root),
                 "Syphon",
             ],
             swiftSettings: [.swiftLanguageMode(.v6)]),
@@ -39,8 +49,8 @@ let package = Package(
         .executableTarget(
             name: "LatencyBench",
             dependencies: [
-                .product(name: "MokumeshLink", package: "mokumesh"),
-                .product(name: "MokumeshSender", package: "mokumesh"),
+                .product(name: "MokumeshLink", package: root),
+                .product(name: "MokumeshSender", package: root),
                 .product(name: "mokume", package: "mokume"),
                 "Syphon",
             ],

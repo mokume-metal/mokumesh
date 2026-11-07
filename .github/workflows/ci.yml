@@ -20,8 +20,15 @@ jobs:
     # GitHub のランナーには mokume の描画に足る GPU が無いので、GPU の Suite は飛ぶ
     # (受け渡しの約束の検査は GPU なしで走る)
     runs-on: macos-latest
+    # わざと mokumesh 以外の名前で checkout する。App/Package.swift が根をディレクトリ名に
+    # 頼らずに引けていることを毎回確かめるため (#13)
+    defaults:
+      run:
+        working-directory: mokumesh-ci
     steps:
       - uses: actions/checkout@v7
+        with:
+          path: mokumesh-ci
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
       - name: Install tools
