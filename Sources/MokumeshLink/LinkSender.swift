@@ -116,6 +116,9 @@ public final class LinkSender: Sendable {
                     return nil
                 }
                 state.counters.connections += 1
+                // 受け手が面を握ったまま居なくなると、送るものが無く送りの失敗でも気付けない。
+                // 知らせで知る (#10)
+                _ = mokumesh_request_dead_name(receiver, replyPort)
                 state.phase = .waiting(receiver: receiver, width: width, height: height, format: format)
                 return (receiver, helloMessage(width: width, height: height, format: format))
             case .waiting(let receiver, let w, let h, let f), .ready(let receiver, let w, let h, let f, _, _, _):
@@ -207,7 +210,7 @@ public final class LinkSender: Sendable {
         var message = LinkMessage(kind: MokumeshKindBye)
         message.stream = stream
         _ = LinkTransport.send(message, to: receiver, timeoutMs: 10)
-        mokumesh_release_send(receiver)
+        Self.forget(receiver)
     }
 
     // MARK: - 中
@@ -233,6 +236,10 @@ public final class LinkSender: Sendable {
             case MokumeshKindRelease:
                 LinkTransport.releaseAll(ports)
                 released(message)
+            case MokumeshKindSenderGone:
+                // 受け手の受け口が無くなった。知らせが持ってきた参照は、繋がりとは別に手放す
+                receiverGone(ports[0])
+                mokumesh_release_send(ports[0])
             default:
                 LinkTransport.releaseAll(ports)
             }
@@ -267,6 +274,23 @@ public final class LinkSender: Sendable {
         }
     }
 
+    private func receiverGone(_ gone: mach_port_t) {
+        let current = state.withLock { state -> mach_port_t? in
+            switch state.phase {
+            case .disconnected: return nil
+            case .waiting(let receiver, _, _, _), .ready(let receiver, _, _, _, _, _, _): return receiver
+            }
+        }
+        // 前の受け手の知らせが遅れて届いたのなら、今の繋がりには触れない
+        if current == gone { disconnect(now: Date()) }
+    }
+
+    /// 受け手への send right を手放す。頼んだ知らせを先に取り消す。
+    private static func forget(_ receiver: mach_port_t) {
+        mokumesh_cancel_dead_name(receiver)
+        mokumesh_release_send(receiver)
+    }
+
     private func disconnect(now: Date) {
         let receiver = state.withLock { state -> mach_port_t? in
             defer { state.phase = .disconnected(lastAttempt: now) }
@@ -275,6 +299,6 @@ public final class LinkSender: Sendable {
             case .waiting(let receiver, _, _, _), .ready(let receiver, _, _, _, _, _, _): return receiver
             }
         }
-        if let receiver { mokumesh_release_send(receiver) }
+        if let receiver { Self.forget(receiver) }
     }
 }
