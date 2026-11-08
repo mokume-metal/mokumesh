@@ -19,6 +19,6 @@ Issue の起こし方・分類・コメントの置き場・コミットと PR �
 | 範囲 | 絵と動きを作る | **マッピングだけ。** 動画の読み込み・シーンの切り替えのような作品の仕事は、ここに足さず作品の側で書く (ADR-0001 決定 1) |
 | 検査 | `make ci-check` (多数) | `make ci-check` (**build・test・schemas・reuse-lint の 4 本**)。GitHub のランナーには mokume の描画に足る GPU が無いので、GPU の Suite は CI で飛ぶ (受け渡しの約束の検査は走る)。GPU の Suite は手元で回す |
 | PR の identity | メンテナ自身の `gh` 認証で作り、承認は要求しない | **同じ** |
-| ブランチ保護 | ruleset | **まだ無い** (mokume の ADR-0026 第 2 段。別の Issue で入れる) |
+| ブランチ保護 | ruleset | **同じ。** 定義は `.github/rulesets/main-protection.json` (削除・force push の禁止、線形履歴、PR 必須で承認 0・squash のみ、`ci-check` 必須)。定義を変えたら merge 後に `gh api -X PUT repos/mokume-metal/mokumesh/rulesets/<id> --input .github/rulesets/main-protection.json` で当てる |
 | バイナリ | 1 つもコミットしない | **同じ。** 視覚的な証跡も外部へ上げて URL で参照する |
 | コメントの署名 | `scripts/comment.sh` が付ける | 素の `gh` で書き、同じ署名の 1 行を手で付ける (mokume の ADR-0026 決定 4) |
