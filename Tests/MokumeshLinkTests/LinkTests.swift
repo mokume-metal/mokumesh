@@ -278,6 +278,36 @@ struct LinkTests {
         #expect(frame?.frame == 2)
     }
 
+    @Test("受け手が面を握ったまま居なくなっても、送り手は名乗り直さずに繋がりを畳む")
+    func sender_notices_receiver_gone_while_starved() throws {
+        // #10: 受け手が面を 3 枚とも握ったまま終わると、送り手には送るものが無く、
+        // 送りの失敗で相手の消滅を知る機会が無い。知らせで知らないと「面が返らない」と数えて名乗り直す
+        let channel = Self.channel()
+        let sender = try LinkSender(channel: channel)
+        defer { sender.close() }
+        let first = try LinkReceiver(channel: channel)
+        #expect(Self.connect(sender))
+        let held = (0..<3).compactMap { _ in sender.acquire() }
+        #expect(held.count == 3)
+
+        first.close()
+        #expect(
+            Self.waitUntil {
+                sender.prepare(width: 8, height: 4, format: .rgba8DisplayP3)
+                return !sender.isReady
+            }, "受け手が居なくなったことに気付かない")
+        for _ in 0...LinkSender.starvationLimit {
+            sender.prepare(width: 8, height: 4, format: .rgba8DisplayP3)
+            _ = sender.acquire()
+        }
+        #expect(sender.counters.regenerations == 0, "面が失われたと取り違えて名乗り直した")
+
+        let second = try LinkReceiver(channel: channel)
+        defer { second.close() }
+        #expect(Self.connect(sender), "新しい受け手へ繋がらない")
+        #expect(sender.counters.connections == 2)
+    }
+
     @Test("同じチャンネルに 2 つ目の受け手は立てられない")
     func second_receiver_on_same_channel_fails() throws {
         let channel = Self.channel()

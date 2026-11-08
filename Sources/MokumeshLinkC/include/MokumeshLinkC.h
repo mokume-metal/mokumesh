@@ -31,7 +31,8 @@ typedef enum : uint32_t {
     MokumeshKindRelease = 4,
     /// 送り手 → 受け手: 映像を終える
     MokumeshKindBye = 5,
-    /// (通ではない) 送り手の受け口が無くなった — 送り手のプロセスが落ちた。ports[0] = 死んだ名前
+    /// (通ではない) 相手の受け口が無くなった — 相手のプロセスが終わったか落ちた。ports[0] = 死んだ名前。
+    /// 受け手は送り手の受け口について、送り手は受け手の受け口について受ける
     MokumeshKindSenderGone = 6,
     /// 受け手 → 送り手: 映す面の情報 (大きさ・形・マスク・UV の配置) を返す。
     /// 番号だけを取ってあり、中身の形は面を返す段で決める (ADR-0001 決定 3)。送り手はいま読み捨てる
@@ -85,6 +86,10 @@ void mokumesh_release_send(mach_port_t port);
 /// port が死んだら notify へ知らせを送るよう頼む。受けると mokumesh_receive が
 /// MokumeshKindSenderGone として返す。
 kern_return_t mokumesh_request_dead_name(mach_port_t port, mach_port_t notify);
+
+/// mokumesh_request_dead_name の頼みを取り消す。send right を手放す前に呼ぶ — 頼んだまま
+/// 手放すと、名前が消えたという別の知らせが届く。
+void mokumesh_cancel_dead_name(mach_port_t port);
 
 /// 1 通を送る。ports と dispositions は MOKUMESH_PORT_COUNT 本。timeoutMs は送りの待ちの上限。
 kern_return_t mokumesh_send(

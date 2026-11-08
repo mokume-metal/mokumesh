@@ -66,6 +66,15 @@ kern_return_t mokumesh_request_dead_name(mach_port_t port, mach_port_t notify) {
     return kr;
 }
 
+void mokumesh_cancel_dead_name(mach_port_t port) {
+    if (port == MACH_PORT_NULL) return;
+    mach_port_t previous = MACH_PORT_NULL;
+    mach_port_request_notification(
+        mach_task_self(), port, MACH_NOTIFY_DEAD_NAME, 0, MACH_PORT_NULL, MACH_MSG_TYPE_MAKE_SEND_ONCE,
+        &previous);
+    if (previous != MACH_PORT_NULL) mach_port_deallocate(mach_task_self(), previous);
+}
+
 kern_return_t mokumesh_send(
     mach_port_t destination, const MokumeshPayload *payload,
     const mach_port_t *ports, const mach_msg_type_name_t *dispositions,
