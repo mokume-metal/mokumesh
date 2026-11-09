@@ -1,5 +1,55 @@
 {
   "channel" : "default",
+  "layers" : [
+    {
+      "corners" : [
+        { "x" : 0, "y" : 0 },
+        { "x" : 3640, "y" : 0 },
+        { "x" : 3640, "y" : 1080 },
+        { "x" : 0, "y" : 1080 }
+      ],
+      "input" : [
+        { "x" : 0, "y" : 0 },
+        { "x" : 1, "y" : 0 },
+        { "x" : 1, "y" : 0.5 },
+        { "x" : 0, "y" : 0.5 }
+      ],
+      "kind" : "surface",
+      "name" : "wall",
+      "stream" : "main",
+      "visible" : true
+    },
+    {
+      "corners" : [
+        { "x" : 1500, "y" : 300 },
+        { "x" : 2200, "y" : 340 },
+        { "x" : 2180, "y" : 820 },
+        { "x" : 1520, "y" : 790 }
+      ],
+      "input" : [
+        { "x" : 0.5, "y" : 0.5 },
+        { "x" : 1, "y" : 0.5 },
+        { "x" : 1, "y" : 1 },
+        { "x" : 0.5, "y" : 1 }
+      ],
+      "kind" : "surface",
+      "name" : "box",
+      "stream" : "main",
+      "visible" : true
+    },
+    {
+      "inverted" : true,
+      "kind" : "mask",
+      "name" : "door",
+      "points" : [
+        { "x" : 300, "y" : 400 },
+        { "x" : 600, "y" : 400 },
+        { "x" : 600, "y" : 1080 },
+        { "x" : 300, "y" : 1080 }
+      ],
+      "visible" : true
+    }
+  ],
   "outputs" : [
     {
       "display" : {
@@ -8,35 +58,57 @@
       },
       "regions" : [
         {
-          "corners" : [
-            {
-              "x" : 0.12,
-              "y" : 0.08
-            },
-            {
-              "x" : 0.91,
-              "y" : 0.15
-            },
-            {
-              "x" : 0.86,
-              "y" : 0.93
-            },
-            {
-              "x" : 0.07,
-              "y" : 0.88
-            }
+          "keystone" : [
+            { "x" : 0.02, "y" : 0.01 },
+            { "x" : 0.99, "y" : 0.04 },
+            { "x" : 0.97, "y" : 0.98 },
+            { "x" : 0.01, "y" : 0.96 }
           ],
-          "name" : "wall",
+          "name" : "left",
+          "placement" : {
+            "height" : 1080,
+            "width" : 1920,
+            "x" : 0,
+            "y" : 0
+          },
           "rect" : {
             "height" : 1,
             "width" : 1,
             "x" : 0,
             "y" : 0
+          }
+        }
+      ]
+    },
+    {
+      "display" : {
+        "id" : 4,
+        "name" : "NEC PJ"
+      },
+      "regions" : [
+        {
+          "keystone" : [
+            { "x" : 0, "y" : 0 },
+            { "x" : 1, "y" : 0 },
+            { "x" : 1, "y" : 1 },
+            { "x" : 0, "y" : 1 }
+          ],
+          "name" : "right",
+          "placement" : {
+            "height" : 1080,
+            "width" : 1920,
+            "x" : 1720,
+            "y" : 0
           },
-          "stream" : "main"
+          "rect" : {
+            "height" : 1,
+            "width" : 1,
+            "x" : 0,
+            "y" : 0
+          }
         }
       ]
     }
   ],
-  "schemaVersion" : 1
+  "schemaVersion" : 2
 }

@@ -7,7 +7,7 @@ SPDX-License-Identifier: MIT
 
 [mokume](https://github.com/mokume-metal/mokume) で作った作品を、プロジェクタで平面や立体物へ投影するためのマッピングのソフト (macOS / Apple Silicon・Swift + Metal)。MadMapper のような有料の道具に頼らずに、mokume の作品を本番へ出せるようにする。
 
-> **状態: 作りはじめ。** 専用の受け渡しと Syphon から受け、領域を 4 点合わせで映すところまで。メッシュ・マスク・ブレンド・3D はまだ無い。設計の土台は [ADR-0001](docs/decisions/0001-foundations.md) にある。
+> **状態: 作りはじめ。** 専用の受け渡しと Syphon から受け、映像の一部を切り取った面をステージに置き、複数のプロジェクタにまたがって台形補正して映すところまで。面を編集する GUI・メッシュ・マスクの描画・ブレンド・3D はまだ無い。設計の土台は [ADR-0001](docs/decisions/0001-foundations.md) と [ADR-0002](docs/decisions/0002-stage-layers-projector-placement.md) にある。
 
 ## するもの
 
@@ -74,8 +74,8 @@ swift run --package-path App mokumesh --window                 # 出力を表示
 ```
 
 1. 操作窓の「表示装置」で、プロジェクタを繋いだ表示装置を入れる。その表示装置を縁の無い窓が覆う
-2. 「4 隅を動かす」を入れ、出力の窓の上で隅をドラッグする。矢印キーで 1 画素、shift を押しながらで 10 画素ずつ動く。四角形が裏返る・凹む動きは採らない
-3. 「保存」で設定を JSON に書く (形式は [Schemas/mapping.schema.json](Schemas/mapping.schema.json))。本番は `--config` で読む
+2. 「台形補正の 4 隅を動かす」を入れ、出力の窓の上で隅をドラッグする。矢印キーで 1 画素、shift を押しながらで 10 画素ずつ動く。四角形が裏返る・凹む動きは採らない
+3. 「保存」で設定を JSON に書く (形式は [Schemas/mapping.schema.json](Schemas/mapping.schema.json)。版 1 の設定も読める)。本番は `--config` で読む
 4. 出力の窓で Esc を押すと、映すのをやめる (本番では効かない)
 
 送り手が無いときは `swift run SendExample` で例のスケッチを送れる。

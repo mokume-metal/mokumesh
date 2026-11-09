@@ -31,16 +31,16 @@ struct ControlView: View {
                 }
                 Button("表示装置を読み直す") { model.refreshDisplays() }
             }
-            Section("映す映像") {
-                ForEach(Array(model.config.outputs.enumerated()), id: \.offset) { outputIndex, output in
-                    ForEach(Array(output.regions.enumerated()), id: \.offset) { regionIndex, region in
+            Section("面の映像") {
+                ForEach(Array(model.config.layers.enumerated()), id: \.offset) { index, layer in
+                    if let surface = layer.surface {
                         Picker(
-                            region.name,
+                            surface.name,
                             selection: Binding(
-                                get: { region.stream },
-                                set: { model.setStream($0, output: outputIndex, region: regionIndex) })
+                                get: { surface.stream },
+                                set: { model.setStream($0, layer: index) })
                         ) {
-                            ForEach(Array(Set(model.streams + [region.stream])).sorted(), id: \.self) {
+                            ForEach(Array(Set(model.streams + [surface.stream])).sorted(), id: \.self) {
                                 Text($0).tag($0)
                             }
                         }
@@ -48,7 +48,7 @@ struct ControlView: View {
                 }
             }
             Section("編集") {
-                Toggle("4 隅を動かす (出力の窓でドラッグ・矢印キーで 1 画素・shift で 10 画素)", isOn: $model.isEditing)
+                Toggle("台形補正の 4 隅を動かす (出力の窓でドラッグ・矢印キーで 1 画素・shift で 10 画素)", isOn: $model.isEditing)
                 Button("4 隅を戻す") { model.resetCorners() }
             }
             Section("設定") {

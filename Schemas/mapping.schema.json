@@ -2,13 +2,13 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/mokume-metal/mokumesh/Schemas/mapping.schema.json",
   "title": "mokumesh mapping configuration",
-  "description": "The calibration mokumesh saves and loads (ADR-0001 decision 7). Outputs are displays the Mac drives; each holds one or more regions, one per projector, so a splitter that divides one output among several projectors is a display with several regions (decision 6). Coordinates are normalized to 0–1.",
+  "description": "The calibration mokumesh saves and loads (ADR-0001 decision 7, shape from ADR-0002). Surfaces and masks are layers on a shared stage measured in pixels; the stage's extent is not stored but derived as the bounding box of every region's placement. Outputs are displays the Mac drives; each holds one or more regions, one per projector (ADR-0001 decision 6). A region shows its placement on the stage, keystoned by four corners. Version 1 files are still read and migrated to this shape.",
   "type": "object",
-  "required": ["schemaVersion", "channel", "outputs"],
+  "required": ["schemaVersion", "channel", "layers", "outputs"],
   "additionalProperties": false,
   "properties": {
     "schemaVersion": {
-      "const": 1,
+      "const": 2,
       "description": "The version of this format. Raised when the shape changes incompatibly."
     },
     "channel": {
@@ -16,12 +16,61 @@
       "minLength": 1,
       "description": "The link channel the receiver checks in under (org.mokume-metal.mokumesh.<channel>)."
     },
+    "layers": {
+      "type": "array",
+      "description": "Surfaces and masks on the stage, drawn in order: earlier layers lie below later ones.",
+      "items": {
+        "oneOf": [{ "$ref": "#/$defs/surface" }, { "$ref": "#/$defs/mask" }]
+      }
+    },
     "outputs": {
       "type": "array",
       "items": { "$ref": "#/$defs/output" }
     }
   },
   "$defs": {
+    "surface": {
+      "type": "object",
+      "required": ["kind", "name", "stream", "visible", "input", "corners"],
+      "additionalProperties": false,
+      "description": "Part of a stream, cut out by a quadrilateral and warped onto a quadrilateral on the stage.",
+      "properties": {
+        "kind": { "const": "surface" },
+        "name": { "type": "string", "minLength": 1 },
+        "stream": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The name of the stream this surface shows."
+        },
+        "visible": { "type": "boolean" },
+        "input": {
+          "$ref": "#/$defs/quad",
+          "description": "The part of the stream to cut out, normalized to 0–1 within the stream."
+        },
+        "corners": {
+          "$ref": "#/$defs/quad",
+          "description": "Where the cut-out lands on the stage, in stage pixels."
+        }
+      }
+    },
+    "mask": {
+      "type": "object",
+      "required": ["kind", "name", "visible", "inverted", "points"],
+      "additionalProperties": false,
+      "description": "A polygon on the stage that blacks out the layers below it outside the polygon (inside when inverted).",
+      "properties": {
+        "kind": { "const": "mask" },
+        "name": { "type": "string", "minLength": 1 },
+        "visible": { "type": "boolean" },
+        "inverted": { "type": "boolean" },
+        "points": {
+          "type": "array",
+          "minItems": 3,
+          "description": "The polygon's vertices in stage pixels.",
+          "items": { "$ref": "#/$defs/point" }
+        }
+      }
+    },
     "output": {
       "type": "object",
       "required": ["display", "regions"],
@@ -46,36 +95,52 @@
     },
     "region": {
       "type": "object",
-      "required": ["name", "rect", "stream", "corners"],
+      "required": ["name", "rect", "placement", "keystone"],
       "additionalProperties": false,
       "description": "One projector.",
       "properties": {
         "name": { "type": "string", "minLength": 1 },
-        "rect": { "$ref": "#/$defs/rect" },
-        "stream": {
-          "type": "string",
-          "minLength": 1,
-          "description": "The name of the stream this region shows."
+        "rect": {
+          "$ref": "#/$defs/unitRect",
+          "description": "The part of the display this projector receives, normalized to the display's width and height (how a splitter divides it)."
         },
-        "corners": {
-          "type": "array",
-          "minItems": 4,
-          "maxItems": 4,
-          "description": "Where the picture's top-left, top-right, bottom-right and bottom-left corners land, normalized within the region. They must form a convex quadrilateral in that order.",
-          "items": { "$ref": "#/$defs/point" }
+        "placement": {
+          "$ref": "#/$defs/pixelRect",
+          "description": "The part of the stage this projector shows, in stage pixels."
+        },
+        "keystone": {
+          "$ref": "#/$defs/quad",
+          "description": "Where the placement's top-left, top-right, bottom-right and bottom-left corners land, normalized within the region."
         }
       }
     },
-    "rect": {
+    "quad": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "description": "Top-left, top-right, bottom-right and bottom-left corners. They must form a convex quadrilateral in that order.",
+      "items": { "$ref": "#/$defs/point" }
+    },
+    "unitRect": {
       "type": "object",
       "required": ["x", "y", "width", "height"],
       "additionalProperties": false,
-      "description": "A rectangle normalized to the display's width and height.",
       "properties": {
         "x": { "type": "number", "minimum": 0, "maximum": 1 },
         "y": { "type": "number", "minimum": 0, "maximum": 1 },
         "width": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
         "height": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 }
+      }
+    },
+    "pixelRect": {
+      "type": "object",
+      "required": ["x", "y", "width", "height"],
+      "additionalProperties": false,
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "width": { "type": "number", "exclusiveMinimum": 0 },
+        "height": { "type": "number", "exclusiveMinimum": 0 }
       }
     },
     "point": {

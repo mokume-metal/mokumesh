@@ -8,10 +8,11 @@ import MokumeshMapping
 import QuartzCore
 import simd
 
-/// 届いた絵を、領域ごとに 4 点合わせで歪めて drawable へ描く。
+/// ステージの面を、領域ごとに drawable へ描く (ADR-0002)。
 ///
-/// 領域の矩形をそのまま覆う四角形を描き、断片ごとに逆の射影変換で絵の座標を求めて取る。
-/// 四角形の外 (絵の外) は黒にする。`bgra8Unorm_srgb` の drawable へ線形の値で書く
+/// 面ごとに領域の矩形をそのまま覆う四角形を描き、断片ごとに「領域 → 受け持つ範囲 → 面 →
+/// 切り取り」の射影変換で絵の座標を求めて取る (`MappingConfig.mapping`)。受け持つ範囲の外と
+/// 面の外は描かず、下の層を残す。層は並びの順に重ねる (乗算済みの over)。`bgra8Unorm_srgb` の drawable へ線形の値で書く
 /// (層の色空間は Display P3)。
 ///
 /// | 来た道 | 読み方 | alpha |
@@ -31,7 +32,9 @@ final class Renderer {
     private var textures: [IOSurfaceID: any MTLTexture] = [:]
 
     struct Uniforms {
-        var inverse: simd_float3x3
+        var regionToPlacement: simd_float3x3
+        var regionToSurface: simd_float3x3
+        var surfaceToInput: simd_float3x3
         var regionOrigin: SIMD2<Float>
         var regionSize: SIMD2<Float>
         var drawableSize: SIMD2<Float>
@@ -52,6 +55,13 @@ final class Renderer {
             descriptor.vertexFunction = library.makeFunction(name: "mapVertex")
             descriptor.fragmentFunction = library.makeFunction(name: "mapFragment")
             descriptor.colorAttachments[0].pixelFormat = Self.drawablePixelFormat
+            // 断片は乗算済みの色を返すので、over は (1, 1 − α)
+            let blend = descriptor.colorAttachments[0]!
+            blend.isBlendingEnabled = true
+            blend.sourceRGBBlendFactor = .one
+            blend.sourceAlphaBlendFactor = .one
+            blend.destinationRGBBlendFactor = .oneMinusSourceAlpha
+            blend.destinationAlphaBlendFactor = .oneMinusSourceAlpha
             pipeline = try device.makeRenderPipelineState(descriptor: descriptor)
         } catch {
             return nil
@@ -67,10 +77,13 @@ final class Renderer {
 
     /// 1 枚の drawable に、領域を全部描く。`frames` は映像の名前で引く。
     ///
+    /// マスクの層はまだ描かない (#25)。
+    ///
     /// 描いた絵 (`SourceFrame`) は投入が終わるまで持ち続ける — 持っている間は受け手が面を
     /// 送り手へ返さないので、GPU が読んでいる途中に上書きされない。
     func draw(
-        regions: [MappingConfig.Region], frames: [String: SourceFrame], into layer: CAMetalLayer,
+        regions: [MappingConfig.Region], layers: [MappingConfig.Layer], frames: [String: SourceFrame],
+        into layer: CAMetalLayer,
         presented: (@Sendable (_ presentedTime: Double, _ frames: [SourceFrame]) -> Void)? = nil
     ) {
         guard let drawable = layer.nextDrawable(), let commands = queue.makeCommandBuffer() else { return }
@@ -86,23 +99,24 @@ final class Renderer {
         encoder.setRenderPipelineState(pipeline)
         encoder.setFragmentSamplerState(sampler, index: 0)
         for region in regions {
-            guard let frame = frames[region.stream], let homography = region.homography else { continue }
-            let texture = frame.texture
-            used.append(frame)
-            let inverse = homography.inverse
-            var uniforms = Uniforms(
-                inverse: simd_float3x3(
-                    columns: (
-                        SIMD3<Float>(inverse.columns.0), SIMD3<Float>(inverse.columns.1),
-                        SIMD3<Float>(inverse.columns.2))),
-                regionOrigin: SIMD2(Float(region.rect.x), Float(region.rect.y)) * drawableSize,
-                regionSize: SIMD2(Float(region.rect.width), Float(region.rect.height)) * drawableSize,
-                drawableSize: drawableSize,
-                flags: (frame.decodesInShader ? 1 : 0) | (frame.premultiplied ? 2 : 0))
-            encoder.setVertexBytes(&uniforms, length: MemoryLayout<Uniforms>.stride, index: 0)
-            encoder.setFragmentBytes(&uniforms, length: MemoryLayout<Uniforms>.stride, index: 0)
-            encoder.setFragmentTexture(texture, index: 0)
-            encoder.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: 4)
+            for case .surface(let surface) in layers where surface.visible {
+                guard let frame = frames[surface.stream],
+                    let mapping = MappingConfig.mapping(surface: surface, region: region)
+                else { continue }
+                if !used.contains(where: { $0 === frame }) { used.append(frame) }
+                var uniforms = Uniforms(
+                    regionToPlacement: Self.float(mapping.regionToPlacement),
+                    regionToSurface: Self.float(mapping.regionToSurface),
+                    surfaceToInput: Self.float(mapping.surfaceToInput),
+                    regionOrigin: SIMD2(Float(region.rect.x), Float(region.rect.y)) * drawableSize,
+                    regionSize: SIMD2(Float(region.rect.width), Float(region.rect.height)) * drawableSize,
+                    drawableSize: drawableSize,
+                    flags: (frame.decodesInShader ? 1 : 0) | (frame.premultiplied ? 2 : 0))
+                encoder.setVertexBytes(&uniforms, length: MemoryLayout<Uniforms>.stride, index: 0)
+                encoder.setFragmentBytes(&uniforms, length: MemoryLayout<Uniforms>.stride, index: 0)
+                encoder.setFragmentTexture(frame.texture, index: 0)
+                encoder.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: 4)
+            }
         }
         encoder.endEncoding()
 
@@ -116,6 +130,11 @@ final class Renderer {
         // 投入が終わるまで絵を持つ。終わったら手放し、最後の持ち手が居なくなった面が送り手へ返る
         commands.addCompletedHandler { _ in _ = holding }
         commands.commit()
+    }
+
+    private static func float(_ matrix: simd_double3x3) -> simd_float3x3 {
+        simd_float3x3(
+            columns: (SIMD3<Float>(matrix.columns.0), SIMD3<Float>(matrix.columns.1), SIMD3<Float>(matrix.columns.2)))
     }
 
     /// 専用の受け渡しの面を、`rgba8Unorm_srgb` の texture に包む。面の識別子で覚えておく。
@@ -140,7 +159,9 @@ final class Renderer {
         using namespace metal;
 
         struct Uniforms {
-            float3x3 inverse;
+            float3x3 regionToPlacement;
+            float3x3 regionToSurface;
+            float3x3 surfaceToInput;
             float2 regionOrigin;
             float2 regionSize;
             float2 drawableSize;
@@ -167,17 +188,25 @@ final class Renderer {
             return out;
         }
 
+        static bool project(float3x3 m, float2 p, thread float2 &out) {
+            float3 projected = m * float3(p, 1);
+            if (projected.z <= 0) return false;
+            out = projected.xy / projected.z;
+            return all(out >= 0) && all(out <= 1);
+        }
+
         fragment float4 mapFragment(
             Varyings in [[stage_in]], constant Uniforms &u [[buffer(0)]],
             texture2d<float> picture [[texture(0)]], sampler linear [[sampler(0)]]) {
-            float3 projected = u.inverse * float3(in.region, 1);
-            if (projected.z <= 0) return float4(0, 0, 0, 1);
-            float2 uv = projected.xy / projected.z;
-            if (any(uv < 0) || any(uv > 1)) return float4(0, 0, 0, 1);
-            float4 color = picture.sample(linear, uv);
+            float2 placement, surface;
+            // 受け持つ範囲の外と、面の外は描かない (下の層を残す)
+            if (!project(u.regionToPlacement, in.region, placement)) discard_fragment();
+            if (!project(u.regionToSurface, in.region, surface)) discard_fragment();
+            float3 input = u.surfaceToInput * float3(surface, 1);
+            float4 color = picture.sample(linear, input.xy / input.z);
             if (u.flags & 1) color.rgb = decodeSRGB(color.rgb);
             float3 over = (u.flags & 2) ? color.rgb : color.rgb * color.a;
-            return float4(over, 1);
+            return float4(over, color.a);
         }
         """
 }

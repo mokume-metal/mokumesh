@@ -8,7 +8,7 @@ import QuartzCore
 /// 表示装置 1 つを覆う、縁の無い出力の窓。
 ///
 /// 表示に合わせて起き (`NSView.displayLink`)、その時点の最新の絵を領域ごとに歪めて描く。
-/// 編集のときは 4 隅の目印と輪郭を上に重ね、ドラッグと矢印のキーで隅を動かせる。
+/// 編集のときは台形補正の 4 隅の目印と輪郭を上に重ね、ドラッグと矢印のキーで隅を動かせる。
 @MainActor
 final class OutputWindow: NSWindow {
     let outputIndex: Int
@@ -113,7 +113,7 @@ final class MapView: NSView {
         guard let renderer = model.renderer, bounds.width > 0 else { return }
         model.pullFrames()
         renderer.draw(
-            regions: model.regions(of: outputIndex), frames: model.currentFrames, into: metalLayer,
+            regions: model.regions(of: outputIndex), layers: model.config.layers, frames: model.currentFrames, into: metalLayer,
             presented: model.presentedHandler())
     }
 
@@ -142,7 +142,7 @@ final class MapView: NSView {
         overlay.sublayers = nil
         guard model.isEditing else { return }
         for (regionIndex, region) in model.regions(of: outputIndex).enumerated() {
-            let points = region.corners.map { viewPoint($0, in: region) }
+            let points = region.keystone.map { viewPoint($0, in: region) }
             let outline = CAShapeLayer()
             let path = CGMutablePath()
             path.addLines(between: points + [points[0]])
@@ -174,7 +174,7 @@ final class MapView: NSView {
         let location = convert(event.locationInWindow, from: nil)
         var nearest: (region: Int, corner: Int, distance: CGFloat)?
         for (regionIndex, region) in model.regions(of: outputIndex).enumerated() {
-            for (cornerIndex, corner) in region.corners.enumerated() {
+            for (cornerIndex, corner) in region.keystone.enumerated() {
                 let point = viewPoint(corner, in: region)
                 let distance = hypot(point.x - location.x, point.y - location.y)
                 if distance < 32, distance < (nearest?.distance ?? .infinity) {
@@ -210,7 +210,7 @@ final class MapView: NSView {
         let step = (event.modifierFlags.contains(.shift) ? 10 : 1) / scale
         let dx = step / (bounds.width * region.rect.width)
         let dy = step / (bounds.height * region.rect.height)
-        var corner = region.corners[selected.corner]
+        var corner = region.keystone[selected.corner]
         switch event.keyCode {
         case 123: corner.x -= dx
         case 124: corner.x += dx
