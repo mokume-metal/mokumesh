@@ -36,6 +36,11 @@
       "description": "Part of a stream, cut out by a quadrilateral and warped onto a quadrilateral on the stage.",
       "properties": {
         "kind": { "const": "surface" },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A name that keeps pointing at this layer when the list is reordered (ADR-0003 decision 3). Unique among all layers. Optional: missing ids are assigned deterministically on load, and the app always writes them."
+        },
         "name": { "type": "string", "minLength": 1 },
         "stream": {
           "type": "string",
@@ -60,6 +65,11 @@
       "description": "A polygon on the stage that blacks out the layers below it outside the polygon (inside when inverted).",
       "properties": {
         "kind": { "const": "mask" },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A name that keeps pointing at this layer when the list is reordered (ADR-0003 decision 3). Unique among all layers. Optional: missing ids are assigned deterministically on load, and the app always writes them."
+        },
         "name": { "type": "string", "minLength": 1 },
         "visible": { "type": "boolean" },
         "inverted": { "type": "boolean" },
@@ -76,6 +86,11 @@
       "required": ["display", "regions"],
       "additionalProperties": false,
       "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A name that keeps pointing at this output when the list is reordered (ADR-0003 decision 3). Unique among outputs. Optional: missing ids are assigned deterministically on load, and the app always writes them."
+        },
         "display": {
           "type": "object",
           "required": ["name", "id"],
@@ -99,6 +114,11 @@
       "additionalProperties": false,
       "description": "One projector.",
       "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A name that keeps pointing at this region when the list is reordered (ADR-0003 decision 3). Unique among all regions, across outputs. Optional: missing ids are assigned deterministically on load, and the app always writes them."
+        },
         "name": { "type": "string", "minLength": 1 },
         "rect": {
           "$ref": "#/$defs/unitRect",

@@ -59,8 +59,31 @@ public struct MappingConfig: Codable, Equatable, Sendable {
             }
         }
 
+        public var id: LayerID {
+            get {
+                switch self {
+                case .surface(let surface): surface.id
+                case .mask(let mask): mask.id
+                }
+            }
+            set {
+                switch self {
+                case .surface(var surface):
+                    surface.id = newValue
+                    self = .surface(surface)
+                case .mask(var mask):
+                    mask.id = newValue
+                    self = .mask(mask)
+                }
+            }
+        }
+
         public var surface: Surface? {
             if case .surface(let surface) = self { surface } else { nil }
+        }
+
+        public var mask: Mask? {
+            if case .mask(let mask) = self { mask } else { nil }
         }
 
         private enum CodingKeys: String, CodingKey { case kind }
@@ -89,6 +112,7 @@ public struct MappingConfig: Codable, Equatable, Sendable {
 
     /// 面 1 つ。映像の一部 (`input`) を切り取り、ステージの四角形 (`corners`) へ歪めて置く。
     public struct Surface: Codable, Equatable, Sendable {
+        public var id: LayerID
         public var name: String
         /// 映す映像の名前。
         public var stream: String
@@ -100,9 +124,10 @@ public struct MappingConfig: Codable, Equatable, Sendable {
         public var corners: [Point]
 
         public init(
-            name: String, stream: String = "main", visible: Bool = true, input: [Point] = Quad.unit,
-            corners: [Point]
+            id: LayerID = .unique(), name: String, stream: String = "main", visible: Bool = true,
+            input: [Point] = Quad.unit, corners: [Point]
         ) {
+            self.id = id
             self.name = name
             self.stream = stream
             self.visible = visible
@@ -111,8 +136,19 @@ public struct MappingConfig: Codable, Equatable, Sendable {
         }
 
         /// ステージの矩形をそのまま覆う面。
-        public init(name: String, stream: String = "main", covering rect: Rect) {
-            self.init(name: name, stream: stream, corners: Quad.corners(of: rect))
+        public init(id: LayerID = .unique(), name: String, stream: String = "main", covering rect: Rect) {
+            self.init(id: id, name: name, stream: stream, corners: Quad.corners(of: rect))
+        }
+
+        /// `id` は書かれていなくてよい (読んだあとで `decode` が振る)。
+        public init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            id = try container.decodeIfPresent(LayerID.self, forKey: .id) ?? LayerID("")
+            name = try container.decode(String.self, forKey: .name)
+            stream = try container.decode(String.self, forKey: .stream)
+            visible = try container.decode(Bool.self, forKey: .visible)
+            input = try container.decode([Point].self, forKey: .input)
+            corners = try container.decode([Point].self, forKey: .corners)
         }
 
         /// 隅を 1 つ動かした面。四角形が裏返る・潰れる・凹むなら `nil`。
@@ -136,6 +172,7 @@ public struct MappingConfig: Codable, Equatable, Sendable {
     ///
     /// 形は版 2 で決めてあり、描くのは後の段である (ADR-0002)。
     public struct Mask: Codable, Equatable, Sendable {
+        public var id: LayerID
         public var name: String
         public var visible: Bool
         /// 内側を覆う (外側を残す) か。
@@ -143,11 +180,24 @@ public struct MappingConfig: Codable, Equatable, Sendable {
         /// 多角形の頂点。ステージの画素。3 点以上。
         public var points: [Point]
 
-        public init(name: String, visible: Bool = true, inverted: Bool = false, points: [Point]) {
+        public init(
+            id: LayerID = .unique(), name: String, visible: Bool = true, inverted: Bool = false, points: [Point]
+        ) {
+            self.id = id
             self.name = name
             self.visible = visible
             self.inverted = inverted
             self.points = points
+        }
+
+        /// `id` は書かれていなくてよい (読んだあとで `decode` が振る)。
+        public init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            id = try container.decodeIfPresent(LayerID.self, forKey: .id) ?? LayerID("")
+            name = try container.decode(String.self, forKey: .name)
+            visible = try container.decode(Bool.self, forKey: .visible)
+            inverted = try container.decode(Bool.self, forKey: .inverted)
+            points = try container.decode([Point].self, forKey: .points)
         }
     }
 
@@ -155,12 +205,22 @@ public struct MappingConfig: Codable, Equatable, Sendable {
 
     /// 表示装置 1 つ。
     public struct Output: Codable, Equatable, Sendable {
+        public var id: OutputID
         public var display: DisplayReference
         public var regions: [Region]
 
-        public init(display: DisplayReference, regions: [Region]) {
+        public init(id: OutputID = .unique(), display: DisplayReference, regions: [Region]) {
+            self.id = id
             self.display = display
             self.regions = regions
+        }
+
+        /// `id` は書かれていなくてよい (読んだあとで `decode` が振る)。
+        public init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            id = try container.decodeIfPresent(OutputID.self, forKey: .id) ?? OutputID("")
+            display = try container.decode(DisplayReference.self, forKey: .display)
+            regions = try container.decode([Region].self, forKey: .regions)
         }
     }
 
@@ -180,6 +240,7 @@ public struct MappingConfig: Codable, Equatable, Sendable {
 
     /// 領域 1 つ = プロジェクタ 1 台。
     public struct Region: Codable, Equatable, Sendable {
+        public var id: RegionID
         public var name: String
         /// 表示装置の中の矩形。表示装置の幅と高さで 0〜1 に正規化する (分配器の割り方)。
         public var rect: Rect
@@ -190,13 +251,24 @@ public struct MappingConfig: Codable, Equatable, Sendable {
         public var keystone: [Point]
 
         public init(
-            name: String, rect: Rect = .unit, placement: Rect = Rect(x: 0, y: 0, width: 1920, height: 1080),
-            keystone: [Point] = Quad.unit
+            id: RegionID = .unique(), name: String, rect: Rect = .unit,
+            placement: Rect = Rect(x: 0, y: 0, width: 1920, height: 1080), keystone: [Point] = Quad.unit
         ) {
+            self.id = id
             self.name = name
             self.rect = rect
             self.placement = placement
             self.keystone = keystone
+        }
+
+        /// `id` は書かれていなくてよい (読んだあとで `decode` が振る)。
+        public init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            id = try container.decodeIfPresent(RegionID.self, forKey: .id) ?? RegionID("")
+            name = try container.decode(String.self, forKey: .name)
+            rect = try container.decode(Rect.self, forKey: .rect)
+            placement = try container.decode(Rect.self, forKey: .placement)
+            keystone = try container.decode([Point].self, forKey: .keystone)
         }
 
         /// 台形補正の隅を 1 つ動かした領域。四角形が裏返る・潰れる・凹むなら `nil` (動かさない)。
@@ -330,24 +402,30 @@ public struct MappingConfig: Codable, Equatable, Sendable {
         case invalidSurface(name: String)
         /// 頂点が 3 つ未満のマスクがある。
         case invalidMask(name: String)
+        /// 同じ ID が 2 度出てくる (層どうし・出力どうし・領域どうし)。
+        case duplicateID(String)
     }
 
-    /// JSON から読む。版 1 は版 2 へ読み替える。4 隅・範囲・マスクを確かめる。
+    /// JSON から読む。版 1 は版 2 へ読み替える。書かれていない ID を振り、4 隅・範囲・マスク・
+    /// ID の重なりを確かめる。
     public static func decode(_ data: Data) throws -> MappingConfig {
         struct Version: Decodable { var schemaVersion: Int }
         let version = try JSONDecoder().decode(Version.self, from: data).schemaVersion
-        let config: MappingConfig
+        var config: MappingConfig
         switch version {
         case 1: config = try JSONDecoder().decode(Version1.self, from: data).migrated()
         case currentVersion: config = try JSONDecoder().decode(MappingConfig.self, from: data)
         default: throw LoadError.unsupportedVersion(version)
         }
+        // 重なりは、書かれていたものどうしで先に見る (振った ID は書かれたものと重ならない)
+        config.assignMissingIdentifiers()
         try config.validate()
         return config
     }
 
-    /// 映せない形を断る。
+    /// 映せない形と、ID の重なりを断る。
     public func validate() throws {
+        if let duplicate = firstDuplicateIdentifier() { throw LoadError.duplicateID(duplicate) }
         for output in outputs {
             for region in output.regions {
                 guard region.placement.width > 0, region.placement.height > 0 else {
@@ -403,16 +481,21 @@ public struct MappingConfig: Codable, Equatable, Sendable {
             let size = (width: 1920.0, height: 1080.0)
             var layers: [Layer] = []
             var index = 0
-            let outputs = outputs.map { output in
+            let outputs = outputs.enumerated().map { number, output in
                 MappingConfig.Output(
-                    display: output.display,
+                    id: OutputID("output-\(number + 1)"), display: output.display,
                     regions: output.regions.map { old in
                         let placement = Rect(
                             x: Double(index) * size.width, y: 0, width: size.width, height: size.height)
                         index += 1
-                        layers.append(.surface(Surface(name: old.name, stream: old.stream, covering: placement)))
+                        layers.append(
+                            .surface(
+                                Surface(
+                                    id: LayerID("layer-\(index)"), name: old.name, stream: old.stream,
+                                    covering: placement)))
                         return MappingConfig.Region(
-                            name: old.name, rect: old.rect, placement: placement, keystone: old.corners)
+                            id: RegionID("region-\(index)"), name: old.name, rect: old.rect, placement: placement,
+                            keystone: old.corners)
                     })
             }
             return MappingConfig(channel: channel, layers: layers, outputs: outputs)

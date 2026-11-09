@@ -8,6 +8,7 @@
         { "x" : 3640, "y" : 1080 },
         { "x" : 0, "y" : 1080 }
       ],
+      "id" : "wall",
       "input" : [
         { "x" : 0, "y" : 0 },
         { "x" : 1, "y" : 0 },
@@ -26,6 +27,7 @@
         { "x" : 2180, "y" : 820 },
         { "x" : 1520, "y" : 790 }
       ],
+      "id" : "box",
       "input" : [
         { "x" : 0.5, "y" : 0.5 },
         { "x" : 1, "y" : 0.5 },
@@ -38,6 +40,7 @@
       "visible" : true
     },
     {
+      "id" : "door",
       "inverted" : true,
       "kind" : "mask",
       "name" : "door",
@@ -56,8 +59,10 @@
         "id" : 3,
         "name" : "EPSON PJ"
       },
+      "id" : "epson",
       "regions" : [
         {
+          "id" : "left",
           "keystone" : [
             { "x" : 0.02, "y" : 0.01 },
             { "x" : 0.99, "y" : 0.04 },
@@ -85,8 +90,10 @@
         "id" : 4,
         "name" : "NEC PJ"
       },
+      "id" : "nec",
       "regions" : [
         {
+          "id" : "right",
           "keystone" : [
             { "x" : 0, "y" : 0 },
             { "x" : 1, "y" : 0 },
