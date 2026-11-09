@@ -30,7 +30,7 @@ public struct DisplayInfo: Hashable, Sendable, Identifiable {
 /// 出力 1 つの出し方 (ADR-0003 決定 7)。保存しない実行時の状態。
 ///
 /// 全画面の先は設定の `Output.display` を正とし、ここには持たない。
-public enum PresentationMode: String, CaseIterable, Hashable, Sendable {
+public enum OutputMode: String, CaseIterable, Hashable, Sendable {
     /// 操作窓のプレビューだけ。
     case preview
     /// 普通の窓に出す (表示装置の代わり。プロジェクタの無い手元で確かめる)。
@@ -61,7 +61,7 @@ public struct PresentationPolicy: Sendable {
     ///
     /// `--window` なら窓。参照先の表示装置が繋がっていて、操作窓の載っていない表示装置なら
     /// 全画面 (プロジェクタへそのまま映す)。それ以外はプレビューだけ。
-    public func initialMode(for output: MappingConfig.Output, displays: [DisplayInfo]) -> PresentationMode {
+    public func initialMode(for output: MappingConfig.Output, displays: [DisplayInfo]) -> OutputMode {
         if windowedOnly { return .window }
         guard let display = DisplayInfo.find(output.display, in: displays) else { return .preview }
         return display.id == controlDisplayID ? .preview : .fullscreen
@@ -78,7 +78,7 @@ public struct PresentationPolicy: Sendable {
     /// 全画面の先が繋がっていない出力は窓を開かない (望んだ出し方は変えないので、
     /// 繋ぎ直せば次の計画で開く)。`--window` のときは全画面を窓に読み替える。
     public func plan(
-        config: MappingConfig, modes: [MappingConfig.OutputID: PresentationMode], displays: [DisplayInfo]
+        config: MappingConfig, modes: [MappingConfig.OutputID: OutputMode], displays: [DisplayInfo]
     ) -> [MappingConfig.OutputID: OutputWindowTarget] {
         var targets: [MappingConfig.OutputID: OutputWindowTarget] = [:]
         for output in config.outputs {
@@ -100,7 +100,7 @@ public struct PresentationPolicy: Sendable {
 
     /// 全画面を望んだのに、表示装置が見つからず映せていない出力。
     public func missingDisplays(
-        config: MappingConfig, modes: [MappingConfig.OutputID: PresentationMode], displays: [DisplayInfo]
+        config: MappingConfig, modes: [MappingConfig.OutputID: OutputMode], displays: [DisplayInfo]
     ) -> [MappingConfig.Output] {
         guard !windowedOnly else { return [] }
         return config.outputs.filter {

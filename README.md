@@ -7,7 +7,7 @@ SPDX-License-Identifier: MIT
 
 [mokume](https://github.com/mokume-metal/mokume) で作った作品を、プロジェクタで平面や立体物へ投影するためのマッピングのソフト (macOS / Apple Silicon・Swift + Metal)。MadMapper のような有料の道具に頼らずに、mokume の作品を本番へ出せるようにする。
 
-> **状態: 作りはじめ。** 専用の受け渡しと Syphon から受け、映像の一部を切り取った面をステージに置き、複数のプロジェクタにまたがって台形補正して映すところまで。面を編集する GUI・メッシュ・マスクの描画・ブレンド・3D はまだ無い。設計の土台は [ADR-0001](docs/decisions/0001-foundations.md) と [ADR-0002](docs/decisions/0002-stage-layers-projector-placement.md) にある。
+> **状態: 作りはじめ。** 専用の受け渡しと Syphon から受け、映像の一部を切り取った面をステージに置き、複数のプロジェクタにまたがって台形補正して映すところまで。ペインの中で面と配置を編集すること・メッシュ・マスクの描画・ブレンド・3D はまだ無い。設計の土台は [ADR-0001](docs/decisions/0001-foundations.md)・[ADR-0002](docs/decisions/0002-stage-layers-projector-placement.md)・[ADR-0003](docs/decisions/0003-editor-architecture.md) にある。
 
 ## するもの
 
@@ -73,16 +73,20 @@ swift run --package-path App mokumesh --config mapping.json    # 操作窓を出
 swift run --package-path App mokumesh --window                 # 出力を表示装置ではなく普通の窓に出す (プロジェクタの無い手元で)
 ```
 
-1. 操作窓の「表示装置」で、プロジェクタを繋いだ表示装置を入れる。その表示装置を縁の無い窓が覆う
-2. 「台形補正の 4 隅を動かす」を入れ、出力の窓の上で隅をドラッグする。矢印キーで 1 画素、shift を押しながらで 10 画素ずつ動く。四角形が裏返る・凹む動きは採らない
-3. 「保存」で設定を JSON に書く (形式は [Schemas/mapping.schema.json](Schemas/mapping.schema.json)。版 1 の設定も読める)。本番は `--config` で読む
-4. 出力の窓で Esc を押すと、映すのをやめる (本番では効かない)
+操作窓は、左に**階層** (入力・面・プロジェクタ)、中央に 4 つのペイン (入力・ステージ・プロジェクタ配置・出力)、右に **inspector** を並べる。階層・ペイン・inspector は同じ選択を見る。構造は [ADR-0003](docs/decisions/0003-editor-architecture.md) にある。
+
+1. 階層の左下の ＋ から「出力を足す」で、プロジェクタを繋いだ表示装置を選ぶ (表示装置が無い手元では「表示装置なし」)。面が無ければ、ステージを覆う面も 1 枚置かれる
+2. 出力のペインで、出力ごとに出し方を選ぶ: **プレビューのみ** / **別窓** / **全画面** (全画面の先の表示装置も選べる)。表示装置が 1 台しか無くても、別窓で出力をいくつでも並べて見られる
+3. 出力のペインの「4 隅」を入れ (表示メニューからも)、出力の窓の上で台形補正の隅をドラッグする。矢印キーで 1 画素、shift を押しながらで 10 画素ずつ動く。四角形が裏返る・凹む動きは採らない
+4. 面は階層で足す・消す・名前を変える (ダブルクリック)・ドラッグで重なり順を変える。inspector で映像を選ぶ。どの操作も ⌘Z で取り消せる
+5. ファイルメニューの「保存」(⌘S) で設定を JSON に書く (形式は [Schemas/mapping.schema.json](Schemas/mapping.schema.json)。版 1 の設定も読める)。本番は `--config` で読む
+6. 出力の窓で Esc を押すと、その出力はプレビューのみに戻る (設定は残る。本番では効かない)
 
 送り手が無いときは `swift run SendExample` で例のスケッチを送れる。
 
 ### Syphon から映す
 
-Syphon の送り手 (他のアプリ・mokume-syphon を入れたスケッチ) は、操作窓の「映す映像」に `syphon:<アプリ名>/<サーバー名>` として並ぶ。選ぶとその領域に映る。Syphon の慣習に従い、届いた色は乗算済みの alpha として扱う。
+Syphon の送り手 (他のアプリ・mokume-syphon を入れたスケッチ) は、階層の「入力」の節に `syphon:<アプリ名>/<サーバー名>` として並ぶ。面を選び、inspector の「映像」で選ぶとその面に映る。Syphon の慣習に従い、届いた色は乗算済みの alpha として扱う。
 
 ### 遅れを測る
 

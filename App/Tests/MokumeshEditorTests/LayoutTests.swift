@@ -32,7 +32,7 @@ struct PresentationPolicyTests {
     func plan_targets() {
         let a = output(projector), b = output(builtIn), c = output(DisplayInfo(id: 5, name: "無い", pixelWidth: 1, pixelHeight: 1))
         let config = MappingConfig(outputs: [a, b, c])
-        let modes: [MappingConfig.OutputID: PresentationMode] = [a.id: .fullscreen, b.id: .window, c.id: .fullscreen]
+        let modes: [MappingConfig.OutputID: OutputMode] = [a.id: .fullscreen, b.id: .window, c.id: .fullscreen]
         let policy = PresentationPolicy()
         #expect(
             policy.plan(config: config, modes: modes, displays: [builtIn, projector])
@@ -155,5 +155,57 @@ struct PaneLayoutTests {
         #expect(layout.columnWidth(width: 800, metrics: metrics) == 100)
         layout.dragRowDivider(column: 1, to: 590, height: 600, metrics: metrics)
         #expect(abs(layout.topHeight(column: 1, height: 600, metrics: metrics) - (600 - 2 - 100)) < 1e-9)
+    }
+}
+
+@Suite("ペインに描くもの")
+struct PaneScenesTests {
+    @Test("ステージのペインは、ステージの外形を受け持つ領域 1 つを、Viewport の枠へ置く")
+    func stage_scene() {
+        let config = MappingConfig(
+            layers: [.surface(.init(name: "a", covering: .init(x: 0, y: 0, width: 3840, height: 1080)))],
+            outputs: [
+                .init(display: .init(name: "PJ", id: 1), regions: [.init(name: "L")]),
+                .init(display: .init(name: "PJ", id: 2), regions: [.init(name: "R", placement: .init(x: 1920, y: 0, width: 1920, height: 1080))]),
+            ])
+        let viewport = Viewport(model: config.stageExtent, viewWidth: 400, viewHeight: 300)
+        let scene = PaneScenes.stage(config, viewport: viewport)
+        #expect(scene.regions.count == 1)
+        #expect(scene.regions[0].placement == .init(x: 0, y: 0, width: 3840, height: 1080))
+        #expect(scene.regions[0].keystone == MappingConfig.Quad.unit)
+        #expect(scene.regions[0].rect == viewport.normalized(viewport.modelFrame))
+        #expect(scene.layers == config.layers)
+    }
+
+    @Test("入力のペインは映像全体を切り取らずに映し、大きさが分からなければ 16:9 で置く")
+    func input_scene() {
+        let model = PaneScenes.inputModel(pixelSize: PixelSize(width: 1280, height: 720))
+        #expect(model == .init(x: 0, y: 0, width: 1280, height: 720))
+        #expect(PaneScenes.inputModel(pixelSize: nil).width == 1920)
+        let viewport = Viewport(model: model, viewWidth: 640, viewHeight: 480)
+        let scene = PaneScenes.input(stream: "main", viewport: viewport)
+        let surface = scene.layers.first?.surface
+        #expect(surface?.stream == "main")
+        #expect(surface?.input == MappingConfig.Quad.unit)
+        #expect(surface?.corners == MappingConfig.Quad.corners(of: model))
+    }
+
+    @Test("出力のプレビューは、領域を表示装置の中の位置のまま縮めて置く")
+    func output_scene() {
+        let left = MappingConfig.Region(name: "L", rect: .init(x: 0, y: 0, width: 0.5, height: 1))
+        let right = MappingConfig.Region(name: "R", rect: .init(x: 0.5, y: 0, width: 0.5, height: 1))
+        let output = MappingConfig.Output(display: .init(name: "分配器", id: 3), regions: [left, right])
+        let displays = [DisplayInfo(id: 3, name: "分配器", pixelWidth: 3840, pixelHeight: 1080)]
+        let model = PaneScenes.outputModel(output, displays: displays)
+        #expect(model == .init(x: 0, y: 0, width: 3840, height: 1080))
+        // 繋がっていなければ、領域が 2 つなので 1920×1080
+        #expect(PaneScenes.outputModel(output, displays: []).width == 1920)
+        // 横に余白が出る大きさ (領域の位置に枠の左端が足されることを見る)
+        let viewport = Viewport(model: model, viewWidth: 800, viewHeight: 100)
+        let scene = PaneScenes.output(output, layers: [], viewport: viewport)
+        let frame = viewport.normalized(viewport.modelFrame)
+        #expect(abs(scene.regions[1].rect.x - (frame.x + frame.width / 2)) < 1e-12)
+        #expect(abs(scene.regions[1].rect.width - frame.width / 2) < 1e-12)
+        #expect(scene.regions[1].placement == right.placement)
     }
 }

@@ -27,11 +27,15 @@ public final class EditorSession {
         }
     }
     public var paneLayout = PaneLayout()
+    /// 出力の窓に台形補正の 4 隅の目印を出し、ドラッグと矢印キーで動かせるようにする。
+    public var showsKeystoneHandles = false
     /// 出力ごとの、望んだ出し方。
-    public private(set) var modes: [MappingConfig.OutputID: PresentationMode] = [:]
+    public private(set) var modes: [MappingConfig.OutputID: OutputMode] = [:]
     public private(set) var displays: [DisplayInfo] = []
     /// 届いている映像 (専用の受け渡しと Syphon)。
     public private(set) var availableStreams: [String] = []
+    /// 映像ごとの絵の大きさ (画素)。1 枚でも届いたものだけ。
+    public private(set) var streamSizes: [String: PixelSize] = [:]
     /// 入力のペインが最後に見せた映像。選択が映像から離れても、入力のペインはこれを見せ続ける。
     private var lastInputStream: String?
 
@@ -64,6 +68,11 @@ public final class EditorSession {
         availableStreams = streams
     }
 
+    public func setStreamSize(_ size: PixelSize?, for stream: String) {
+        guard streamSizes[stream] != size else { return }
+        streamSizes[stream] = size
+    }
+
     // MARK: - 出し方
 
     /// 開いておくべき窓。
@@ -76,18 +85,18 @@ public final class EditorSession {
         policy.missingDisplays(config: document.config, modes: modes, displays: displays)
     }
 
-    public func mode(of output: MappingConfig.OutputID) -> PresentationMode {
+    public func mode(of output: MappingConfig.OutputID) -> OutputMode {
         modes[output] ?? .preview
     }
 
-    public func setMode(_ mode: PresentationMode, for output: MappingConfig.OutputID) {
+    public func setMode(_ mode: OutputMode, for output: MappingConfig.OutputID) {
         guard document.config.output(output) != nil, modes[output] != mode else { return }
         modes[output] = mode
         planChanged()
     }
 
     /// すべての出力を同じ出し方にする (本番の起動・Esc で窓を閉じる)。
-    public func setAllModes(_ mode: PresentationMode) {
+    public func setAllModes(_ mode: OutputMode) {
         for output in document.config.outputs { modes[output.id] = mode }
         planChanged()
     }
@@ -160,5 +169,16 @@ public final class EditorSession {
         case .layer(let id): config.layer(id)?.surface?.stream
         default: nil
         }
+    }
+}
+
+/// 絵の大きさ (画素)。
+public struct PixelSize: Hashable, Sendable {
+    public var width: Double
+    public var height: Double
+
+    public init(width: Double, height: Double) {
+        self.width = width
+        self.height = height
     }
 }
