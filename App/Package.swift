@@ -37,9 +37,20 @@ let package = Package(
             url:
                 "https://github.com/mokume-metal/mokume-syphon/releases/download/v0.3.0/Syphon.xcframework.zip",
             checksum: "d129edd420d700cb7512e9c93db596f17dbd1907abb6766439af93ccfc8b6801"),
+        // 編集の論理 (文書・選択・出し方の計画・座標の写し・ペインの配置)。AppKit と SwiftUI に
+        // 依存させず、検査で確かめる (docs/decisions/0003 決定 4)
+        .target(
+            name: "MokumeshEditor",
+            dependencies: [.product(name: "MokumeshMapping", package: root)],
+            swiftSettings: [.swiftLanguageMode(.v6)]),
+        .testTarget(
+            name: "MokumeshEditorTests",
+            dependencies: ["MokumeshEditor", .product(name: "MokumeshMapping", package: root)],
+            swiftSettings: [.swiftLanguageMode(.v6)]),
         .executableTarget(
             name: "mokumesh",
             dependencies: [
+                "MokumeshEditor",
                 .product(name: "MokumeshLink", package: root),
                 .product(name: "MokumeshMapping", package: root),
                 "Syphon",
