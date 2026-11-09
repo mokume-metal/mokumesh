@@ -84,7 +84,7 @@ final class AppModel {
     /// 映している映像それぞれの最新の 1 枚を取る。新しい 1 枚が来たら、前の 1 枚は手放す
     /// (描いている途中のものは、描く側が持ち続けている)。
     func pullFrames() {
-        let wanted = Set(config.outputs.flatMap { $0.regions.map(\.stream) })
+        let wanted = Set(config.layers.compactMap { $0.surface.flatMap { $0.visible ? $0.stream : nil } })
         if let receiver, let renderer {
             for stream in wanted where !SyphonSources.isSyphon(stream) {
                 guard let frame = receiver.latest(stream: stream), let texture = renderer.texture(for: frame)
@@ -126,26 +126,36 @@ final class AppModel {
         config.outputs.contains { $0.display.id == display.id }
     }
 
-    /// 表示装置へ映すかを切り替える。映し始めるときは、表示装置全体を 1 つの領域にする。
+    /// 表示装置へ映すかを切り替える。映し始めるときは、表示装置全体を 1 つの領域にし、
+    /// その受け持つ範囲をステージの右端に足す。面が 1 枚も無ければ、範囲を覆う面を置く。
     func setShowing(_ display: ConnectedDisplay, _ showing: Bool) {
         if showing, !isShowing(display) {
-            let stream = streams.first ?? "main"
+            let scale = display.screen.backingScaleFactor
+            let size = (width: display.screen.frame.width * scale, height: display.screen.frame.height * scale)
+            let placement = MappingConfig.Rect(
+                x: config.stageBounds?.maxX ?? 0, y: 0, width: Double(size.width), height: Double(size.height))
             config.outputs.append(
                 MappingConfig.Output(
                     display: .init(name: display.name, id: display.id),
-                    regions: [MappingConfig.Region(name: display.name, stream: stream)]))
+                    regions: [MappingConfig.Region(name: display.name, placement: placement)]))
+            if !config.layers.contains(where: { $0.surface != nil }) {
+                config.layers.append(
+                    .surface(.init(name: "面 1", stream: streams.first ?? "main", covering: placement)))
+            }
         } else if !showing {
             config.outputs.removeAll { $0.display.id == display.id }
         }
         rebuildWindows()
     }
 
-    func setStream(_ stream: String, output: Int, region: Int) {
-        guard output < config.outputs.count, region < config.outputs[output].regions.count else { return }
-        config.outputs[output].regions[region].stream = stream
+    /// 面の映像を替える。
+    func setStream(_ stream: String, layer: Int) {
+        guard config.layers.indices.contains(layer), case .surface(var surface) = config.layers[layer] else { return }
+        surface.stream = stream
+        config.layers[layer] = .surface(surface)
     }
 
-    /// 隅を動かす。四角形が裏返る・潰れる動きは採らない。
+    /// 領域の台形補正の隅を動かす。四角形が裏返る・潰れる動きは採らない。
     func moveCorner(output: Int, region: Int, corner: Int, to point: Point) {
         guard output < config.outputs.count, region < config.outputs[output].regions.count else { return }
         guard let moved = config.outputs[output].regions[region].movingCorner(corner, to: point) else { return }
@@ -156,7 +166,7 @@ final class AppModel {
     func resetCorners() {
         for output in config.outputs.indices {
             for region in config.outputs[output].regions.indices {
-                config.outputs[output].regions[region].corners = MappingConfig.Region.identity
+                config.outputs[output].regions[region].keystone = MappingConfig.Quad.unit
             }
         }
         outputWindows.forEach { $0.refreshOverlay() }
