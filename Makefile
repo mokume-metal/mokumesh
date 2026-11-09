@@ -9,8 +9,10 @@ build:
 	swift build
 	swift build --package-path App
 
+# App/ の検査は、AppKit に依存しない編集の論理 (MokumeshEditor) だけを持つ (ADR-0003 決定 4)
 test:
 	swift test
+	swift test --package-path App
 
 # プロセスの外とやりとりする JSON の正典 (Schemas/*.schema.json) と、代表例が食い違わないこと
 schemas:
