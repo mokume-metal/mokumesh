@@ -17,7 +17,7 @@ Issue の起こし方・分類・コメントの置き場・コミットと PR �
 | 設計判断の正典 | `docs/decisions/` の ADR | **持つ** (`docs/decisions/`)。書くのはマッピングに固有の判断だけである。mokume の ADR と食い違う判断が要るときは、ここに書かずに mokume 側へ Issue を立てる。土台は [ADR-0001](docs/decisions/0001-foundations.md) |
 | 本体との関係 | — | **mokume は mokumesh を知らない。** 本体の版への追随・本体の変化で壊れたことへの気付きは、すべてこちらが負う (ADR-0001 決定 2) |
 | 範囲 | 絵と動きを作る | **マッピングだけ。** 動画の読み込み・シーンの切り替えのような作品の仕事は、ここに足さず作品の側で書く (ADR-0001 決定 1) |
-| 検査 | `make ci-check` (多数) | `make ci-check` (**build・test・schemas・reuse-lint の 4 本**)。GitHub のランナーには mokume の描画に足る GPU が無いので、GPU の Suite は CI で飛ぶ (受け渡しの約束の検査は走る)。GPU の Suite は手元で回す |
+| 検査 | `make ci-check` (多数) | `make ci-check` (**build・test・schemas・reuse-lint の 4 本**)。GitHub のランナーには mokume の描画に足る GPU が無いので、GPU の Suite は CI で飛ぶ (受け渡しの約束の検査は走る)。GPU の Suite は手元で回す。SwiftPM の取得物は CI で cache するが、GitHub 側の障害 (Release の資産や clone が 5xx を返す) でビルドの前に落ちたときは、コードと関係ないので失敗したジョブを流し直す |
 | PR の identity | メンテナ自身の `gh` 認証で作り、承認は要求しない | **同じ** |
 | ブランチ保護 | ruleset | **同じ。** 定義は `.github/rulesets/main-protection.json` (削除・force push の禁止、線形履歴、PR 必須で承認 0・squash のみ、`ci-check` 必須)。定義を変えたら merge 後に `gh api -X PUT repos/mokume-metal/mokumesh/rulesets/<id> --input .github/rulesets/main-protection.json` で当てる |
 | バイナリ | 1 つもコミットしない | **同じ。** 視覚的な証跡も外部へ上げて URL で参照する |
