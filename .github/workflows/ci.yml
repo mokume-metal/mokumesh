@@ -30,7 +30,25 @@ jobs:
         with:
           path: mokumesh-ci
       - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+        id: xcode
+        run: |
+          sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+          echo "swift=$(swift --version 2>/dev/null | head -1 | shasum | cut -c1-12)" >> "$GITHUB_OUTPUT"
+      # SwiftPM の取得物 (binaryTarget の zip・git の依存・swift-syntax の prebuilt) を持ち越す。
+      # 毎回 GitHub の Release の資産を取りに行くと、その資産が 504 を返すだけでビルドの前で
+      # 落ちる (#29)。binaryTarget の zip と prebuilt は、この置き場にあれば外へ取りに行かない
+      # (資産は App/Package.swift が版と checksum で固定しているので、古い中身を使うことは無い)。
+      # git の依存は版の範囲で引くので更新を見に行くが、clone を持ち越せば取る量が減る
+      - name: Cache SwiftPM downloads
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/Library/Caches/org.swift.swiftpm/artifacts
+            ~/Library/Caches/org.swift.swiftpm/repositories
+            ~/Library/Caches/org.swift.swiftpm/prebuilts
+          key: swiftpm-${{ runner.os }}-${{ steps.xcode.outputs.swift }}-${{ hashFiles('mokumesh-ci/Package.swift', 'mokumesh-ci/App/Package.swift') }}
+          restore-keys: |
+            swiftpm-${{ runner.os }}-
       - name: Install tools
         run: pipx install reuse && pipx inject reuse chardet && pipx install check-jsonschema
       - run: make ci-check
